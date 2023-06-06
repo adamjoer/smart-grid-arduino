@@ -74,9 +74,9 @@ void ADCsetup() {
 // This is the interrupt service routine (ISR) that is called
 // if an ADC measurement falls out of the range of the window
 void ADC_Handler() {
-    measurement = ADC->RESULT.reg;
-    
-    ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY; //Need to reset interrupt
+  measurement = ADC->RESULT.reg;
+
+  ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY; //Need to reset interrupt
 }
 
 void TimerSetup() {
@@ -90,6 +90,27 @@ void TimerSetup() {
 
   // start the timer
   MyTimer5.start();
+}
+
+void DACOn() {
+  // Enable DAC
+  DAC->CTRLA.bit.ENABLE = 1;
+}
+
+void DACOff() {
+  // Disable DAC
+  DAC->CTRLA.bit.ENABLE = 0;
+}
+
+void DACSetup() {
+  // Use analog voltage supply as reference selection
+  DAC->CTRLB.bit.REFSEL = 0x01;
+
+  // Enable output buffer
+  DAC->CTRLB.bit.EOEN = 1;
+
+  // Enable DAC
+  DACOn();
 }
 
 void setup() {
@@ -124,7 +145,7 @@ void Timer5_IRQ(void) {
 
 void loop()
 {
-	// print every 10 secs how often the
-    // timer interrupt was called
+  // print every 10 secs how often the
+  // timer interrupt was called
   Serial.println(measurement);
 }
