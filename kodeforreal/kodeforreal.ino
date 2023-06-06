@@ -16,7 +16,7 @@
 
 int led = 10;
 volatile int count=0;
-
+volatile int measurement=0;
 long t = millis();    // timer variable for printout
 
 
@@ -93,9 +93,9 @@ void ADCsetup()
 //This is the interrupt service routine (ISR) that is called 
 //if an ADC measurement falls out of the range of the window 
 void ADC_Handler() {
-    digitalWrite(LED_BUILTIN, HIGH); //turn LED off
-    ADC->INTFLAG.reg = ADC_INTFLAG_WINMON; //Need to reset interrupt
-    //RETURN TO SENDER
+    measurement = ADC->RESULT.reg;
+    
+    ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY; //Need to reset interrupt
 }
 
 void TimerSetup(){
@@ -123,9 +123,8 @@ while (GCLK->STATUS.bit.SYNCBUSY) {};
 
 	// debug output at 115200 baud
 	Serial.begin(9600);
-	//while (!SerialUSB) ;
+	//while (!SerialUSB);
 		
-
 }
 
 // will be called by the MyTimer5 object
@@ -141,20 +140,11 @@ void Timer5_IRQ(void) {
       on = true;
         digitalWrite(led,HIGH);
     }
-
 }
 
 void loop()
 {
 	// print every 10 secs how often the
     // timer interrupt was called
-
-	while (true) {
-		if (millis() - t >= 10000) {
-			t = millis();
-            Serial.print(millis());
- 			Serial.print("  count=");
-			Serial.println(count);
-		}
-	}
+  Serial.println(measurement);
 }
