@@ -6,6 +6,10 @@ volatile int count=0;
 volatile int measurement=0;
 long t = millis();    // timer variable for printout
 
+const int WAVE_SAMPLES_COUNT = 4096;
+
+int sinWaveSamples[WAVE_SAMPLES_COUNT] = {0};
+
 void ADCsetup() {
 
   /* Enable the APB clock for the ADC. */
@@ -82,13 +86,13 @@ void ADC_Handler() {
 void TimerSetup() {
   Serial.println("starting timer");
 
-  // define frequency of interrupt
-  MyTimer5.begin(1); // 200=for toggle every 5msec
+  // define frequency of interrupt; 1000 = approx. every 1 ms.
+  MyTimer5.begin(1000);
 
-  // define the interrupt callback function
+  // Define the interrupt callback function
   MyTimer5.attachInterrupt(Timer5_IRQ);
 
-  // start the timer
+  // Start the timer
   MyTimer5.start();
 }
 
@@ -115,17 +119,30 @@ void DACSetup() {
 
 void setup() {
   pinMode(led, OUTPUT);
+
   Serial.begin(9600);
 
   ADCsetup();
   TimerSetup();
 
-	pinMode(led,OUTPUT);
+  pinMode(led,OUTPUT);
 
-	// debug output at 115200 baud
-	Serial.begin(9600);
-	//while (!SerialUSB);
-  while (GCLK->STATUS.bit.SYNCBUSY);		
+  while (GCLK->STATUS.bit.SYNCBUSY);
+
+  generateSineWaveSamples();
+}
+
+void generateSineWaveSamples() {
+  const float PI2 = 3.14159 * 2;
+
+  for (int i = 0; i < WAVE_SAMPLES_COUNT; ++i) {
+
+    //calculate value in radians for sin()
+    float in = PI2 * (1 / (float) WAVE_SAMPLES_COUNT) * (float) i;
+
+    // Calculate sine wave value and offset based on DAC resolution 511.5 = 1023/2
+    sinWaveSamples[i] = ((int) (sin(in) * 511.5 + 511.5));
+  }
 }
 
 // will be called by the MyTimer5 object
