@@ -5,9 +5,6 @@ int led = 10;
 volatile int count=0;
 volatile int measurement=0;
 long t = millis();    // timer variable for printout
-const int WAVE_SAMPLES_COUNT = 4096;
-
-int sineWaveSamples[WAVE_SAMPLES_COUNT] = {0};
 
 void ADCsetup() {
 
@@ -128,21 +125,6 @@ void setup() {
   pinMode(led,OUTPUT);
 
   while (GCLK->STATUS.bit.SYNCBUSY);
-
-  generateSineWaveSamples();
-}
-
-void generateSineWaveSamples() {
-  const float PI2 = 3.14159 * 2;
-
-  for (int i = 0; i < WAVE_SAMPLES_COUNT; ++i) {
-
-    //calculate value in radians for sin()
-    float in = PI2 * (1 / (float) WAVE_SAMPLES_COUNT) * (float) i;
-
-    // Calculate sine wave value and offset based on DAC resolution 511.5 = 1023/2
-    sineWaveSamples[i] = ((int) (sin(in) * 511.5 + 511.5));
-  }
 }
 
 void Timer5_IRQ() {
