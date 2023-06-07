@@ -5,10 +5,9 @@ int led = 10;
 volatile int count=0;
 volatile int measurement=0;
 long t = millis();    // timer variable for printout
-
 const int WAVE_SAMPLES_COUNT = 4096;
 
-int sinWaveSamples[WAVE_SAMPLES_COUNT] = {0};
+int sineWaveSamples[WAVE_SAMPLES_COUNT] = {0};
 
 void ADCsetup() {
 
@@ -79,7 +78,7 @@ void ADCsetup() {
 // if an ADC measurement falls out of the range of the window
 void ADC_Handler() {
   measurement = ADC->RESULT.reg;
-
+  DAC->DATABUF.reg = measurement;
   ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY; //Need to reset interrupt
 }
 
@@ -123,6 +122,7 @@ void setup() {
   Serial.begin(9600);
 
   ADCsetup();
+  DACSetup();
   TimerSetup();
 
   pinMode(led,OUTPUT);
@@ -141,28 +141,13 @@ void generateSineWaveSamples() {
     float in = PI2 * (1 / (float) WAVE_SAMPLES_COUNT) * (float) i;
 
     // Calculate sine wave value and offset based on DAC resolution 511.5 = 1023/2
-    sinWaveSamples[i] = ((int) (sin(in) * 511.5 + 511.5));
+    sineWaveSamples[i] = ((int) (sin(in) * 511.5 + 511.5));
   }
 }
 
-// will be called by the MyTimer5 object
-// toggles LED state at pin 10
-void Timer5_IRQ(void) {
-    static bool on = false;
-    count++;  // count number of toggles
-    ADC->SWTRIG.bit.START = true;    
-    if (on == true) {
-      on = false;
-        digitalWrite(led,LOW);
-    } else {
-      on = true;
-        digitalWrite(led,HIGH);
-    }
+void Timer5_IRQ() {
+  ADC->SWTRIG.bit.START = true;
 }
 
-void loop()
-{
-  // print every 10 secs how often the
-  // timer interrupt was called
-  Serial.println(measurement);
+void loop() {
 }
