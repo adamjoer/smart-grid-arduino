@@ -1,19 +1,8 @@
-#include "Timer5.h"
 #include "avr/interrupt.h"
 
-int led = 10;
-volatile int count=0;
-volatile int measurement=0;
-long t = millis();    // timer variable for printout
+volatile int measurement = 0;
 
 void ADCsetup() {
-
-  /* Enable the APB clock for the ADC. */
-  PM->APBCMASK.reg |= PM_APBCMASK_ADC;
-
-  /* Enable GCLK1 for the ADC */
-  GCLK->CLKCTRL.reg =
-      GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK1 | GCLK_CLKCTRL_ID_ADC;
 
   /* Wait for bus synchronization. */
   while (GCLK->STATUS.bit.SYNCBUSY);
@@ -33,7 +22,7 @@ void ADCsetup() {
     8 Mhz / 512 = 31.25 kHz.
     Set the resolution to 10bit.
   */
-  ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV4 | ADC_CTRLB_RESSEL_10BIT;
+  ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV16 | ADC_CTRLB_RESSEL_10BIT | ADC_CTRLB_FREERUN;
 
   /* Configure the input parameters.
 
@@ -64,32 +53,41 @@ void ADCsetup() {
   NVIC_EnableIRQ(ADC_IRQn); // enable ADC interrupts
 
   /* Wait for bus synchronization. */
-  while (ADC->STATUS.bit.SYNCBUSY) {
-  };
+  while (ADC->STATUS.bit.SYNCBUSY);
 
   /* Enable the ADC. */
   ADC->CTRLA.bit.ENABLE = true;
 }
 
+void ADCClockSetup() {
+
+  // Enable the 8MHz internal oscillator
+  SYSCTRL->OSC8M.reg |= SYSCTRL_OSC8M_ENABLE;
+
+  // Setup clock GCLK3 for no div factor
+   GCLK->GENDIV.reg |= GCLK_GENDIV_ID(3)| GCLK_GENDIV_DIV(1);
+   while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+
+  //configure the generator of the generic clock, which is 8MHz clock
+  GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_DIVSEL;
+  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+
+  //enable clock, set gen clock number, and ID to where the clock goes (30 is ADC)
+  GCLK->CLKCTRL.reg |= GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(3) | GCLK_CLKCTRL_ID(30);
+  while (GCLK->STATUS.bit.SYNCBUSY);
+}
+
 // This is the interrupt service routine (ISR) that is called
 // if an ADC measurement falls out of the range of the window
 void ADC_Handler() {
+
+  // Save ADC measurement
   measurement = ADC->RESULT.reg;
-  DAC->DATABUF.reg = measurement;
+
+  // Input ADC measurement in DAC
+  DAC->DATA.reg = measurement;
+
   ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY; //Need to reset interrupt
-}
-
-void TimerSetup() {
-  Serial.println("starting timer");
-
-  // define frequency of interrupt; 1000 = approx. every 1 ms.
-  MyTimer5.begin(1000);
-
-  // Define the interrupt callback function
-  MyTimer5.attachInterrupt(Timer5_IRQ);
-
-  // Start the timer
-  MyTimer5.start();
 }
 
 void DACOn() {
@@ -114,21 +112,13 @@ void DACSetup() {
 }
 
 void setup() {
-  pinMode(led, OUTPUT);
-
   Serial.begin(9600);
 
+  ADCClockSetup();
   ADCsetup();
   DACSetup();
-  TimerSetup();
-
-  pinMode(led,OUTPUT);
 
   while (GCLK->STATUS.bit.SYNCBUSY);
-}
-
-void Timer5_IRQ() {
-  ADC->SWTRIG.bit.START = true;
 }
 
 void loop() {
