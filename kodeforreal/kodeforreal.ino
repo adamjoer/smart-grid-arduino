@@ -5,6 +5,8 @@ const int SAMPLING_RATE = 10000;
 
 volatile int measurement = 0;
 
+volatile int cumulativeMeasurement = 0;
+
 volatile int counter = 0;
 
 volatile int previousCounter = 0;
@@ -12,6 +14,9 @@ volatile int previousCounter = 0;
 volatile unsigned long time = millis();
 
 void ADCsetup() {
+
+  // Set up clock before anything else
+  ADCClockSetup();
 
   /* Wait for bus synchronization. */
   while (GCLK->STATUS.bit.SYNCBUSY);
@@ -31,7 +36,7 @@ void ADCsetup() {
     8 Mhz / 16 = 500 kHz.
     Set the resolution to 10bit.
   */
-  ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV16 | ADC_CTRLB_RESSEL_10BIT | ADC_CTRLB_FREERUN;
+  ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV16 | ADC_CTRLB_RESSEL_10BIT;
 
   /* Configure the input parameters.
 
@@ -70,15 +75,15 @@ void ADCsetup() {
 
 void ADCClockSetup() {
 
-  // Enable the 8MHz internal oscillator
-  SYSCTRL->OSC8M.reg |= SYSCTRL_OSC8M_ENABLE;
+  // Enable the 48MHz internal oscillator
+  SYSCTRL->DFLLCTRL.reg = SYSCTRL_DFLLCTRL_ENABLE;
 
   // Setup clock GCLK3 for no div factor
    GCLK->GENDIV.reg |= GCLK_GENDIV_ID(3)| GCLK_GENDIV_DIV(1);
    while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
 
-  //configure the generator of the generic clock, which is 8MHz clock
-  GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_DIVSEL;
+  //configure the generator of the generic clock, which is 48MHz clock
+  GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_DIVSEL;
   while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
 
   //enable clock, set gen clock number, and ID to where the clock goes (30 is ADC)
@@ -132,6 +137,8 @@ void ADC_Handler() {
   // Save ADC measurement
   measurement = ADC->RESULT.reg;
 
+  cumulativeMeasurement += measurement;
+
   // Input ADC measurement in DAC
   DAC->DATA.reg = measurement;
 
@@ -150,7 +157,7 @@ void DACOff() {
 
 void DACSetup() {
   // Use analog voltage supply as reference selection
-  DAC->CTRLB.bit.REFSEL = 0x01;
+  DAC->CTRLB.bit.REFSEL = 1;
 
   // Enable output buffer
   DAC->CTRLB.bit.EOEN = 1;
@@ -163,6 +170,9 @@ void TCC0_Handler() {
 
   counter++;
 
+  // Start ADC conversion
+  ADC->SWTRIG.bit.START = 1;
+
   // Reset interrupt flag
   TCC0->INTFLAG.bit.MC0 = 1;
 }
@@ -171,7 +181,6 @@ void setup() {
   Serial.begin(9600);
 
   timerSetup();
-  ADCClockSetup();
   ADCsetup();
   DACSetup();
 
@@ -183,12 +192,19 @@ void loop() {
   const int INTERVAL_MS = 1000;
   if (unsigned long currentTime = millis(); currentTime - time >= INTERVAL_MS) {
 
+    int diff = counter - previousCounter;
+
     Serial.print(currentTime);
     Serial.print(" ms: counter=");
     Serial.print(counter);
     Serial.print(", diff=");
-    Serial.println(counter - previousCounter);
+    Serial.print(diff);
+    Serial.print(", avg=");
+    Serial.print(cumulativeMeasurement / diff);
 
+    Serial.println();
+
+    cumulativeMeasurement = 0;
     time = currentTime;
     previousCounter = counter;
   }
