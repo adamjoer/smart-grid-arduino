@@ -1,15 +1,28 @@
 #include "avr/interrupt.h"
 #include "core_cm0plus.h"
 
-const int SAMPLING_RATE = 10000;
+// Constant for ADC sampling
+constexpr int SAMPLING_RATE = 10000;
 
-volatile int measurement = 0;
+// Constants for low pass filter
+constexpr int CUTOFF_FREQ = 50;
 
-volatile int cumulativeMeasurement = 0;
+constexpr float RC = 1 / (2 * PI * CUTOFF_FREQ);
 
-volatile unsigned int counter = 0;
+constexpr float ALPHA = (1 / SAMPLING_RATE) / (RC + (1 / SAMPLING_RATE));
 
-volatile int previousCounter = 0;
+// Global variables
+volatile int rawMeasurement = 0;
+
+volatile int cumulativeRawMeasurement = 0;
+
+volatile float filterOutput = 0;
+
+volatile int previousFilterOutput;
+
+volatile unsigned int sampleCounter = 0;
+
+volatile int previousSampleCounter;
 
 volatile unsigned long time = millis();
 
@@ -111,8 +124,8 @@ void timerSetup() {
   // Wait for bus synchronization
   while (TCC0->SYNCBUSY.bit.WAVE);
 
-  // Set counter compare value based on sampling rate
-  TCC0->CC[0].reg = 48000000 / SAMPLING_RATE;
+  // Set counter compare value based on clock speed and sampling rate
+  TCC0->CC[0].reg = 48e6 / SAMPLING_RATE;
 
   // Wait for bus synchronization
   while (TCC0->SYNCBUSY.bit.CC0);
@@ -153,26 +166,35 @@ inline void DACOff() {
 }
 
 
+inline float lowPassFilter(float xn, float yn1) {
+  return ALPHA * xn + (1 - ALPHA) * yn1;
+}
+
 // This is the interrupt service routine (ISR) that is called
 // if an ADC measurement falls out of the range of the window
 void ADC_Handler() {
 
   // Save ADC measurement
-  measurement = ADC->RESULT.reg;
+  rawMeasurement = ADC->RESULT.reg;
 
-  cumulativeMeasurement += measurement;
+  cumulativeRawMeasurement += rawMeasurement;
+
+  previousFilterOutput = filterOutput;
+
+  filterOutput = lowPassFilter((float) rawMeasurement, (float) previousFilterOutput);
 
   // Input ADC measurement in DAC
-  DAC->DATA.reg = measurement;
+  DAC->DATA.reg = rawMeasurement;
 
-  ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY; //Need to reset interrupt
+  // Reset ADC interrupt
+  ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY;
 }
 
 // This is the interrupt service routine (ISR) that is called
 // periodically by the timer, based on the sampling rate
 void TCC0_Handler() {
 
-  counter++;
+  sampleCounter++;
 
   // Start ADC conversion
   ADC->SWTRIG.bit.START = 1;
@@ -194,20 +216,22 @@ void loop() {
   const int INTERVAL_MS = 1000;
   if (unsigned long currentTime = millis(); currentTime - time >= INTERVAL_MS) {
 
-    int diff = counter - previousCounter;
+    int diff = sampleCounter - previousSampleCounter;
 
     Serial.print(currentTime);
     Serial.print(" ms: counter=");
-    Serial.print(counter);
+    Serial.print(sampleCounter);
     Serial.print(", diff=");
     Serial.print(diff);
     Serial.print(", avg=");
-    Serial.print(cumulativeMeasurement / diff);
+    Serial.print(cumulativeRawMeasurement / diff);
+    Serial.print(", filterOutput=");
+    Serial.print(filterOutput);
 
     Serial.println();
 
-    cumulativeMeasurement = 0;
+    cumulativeRawMeasurement = 0;
     time = currentTime;
-    previousCounter = counter;
+    previousSampleCounter = sampleCounter;
   }
 }
