@@ -13,6 +13,7 @@ volatile int previousCounter = 0;
 
 volatile unsigned long time = millis();
 
+// Set up ADC. ADC Listens on port A3 (PA04)
 void ADCsetup() {
 
   // Set up clock before anything else
@@ -70,6 +71,7 @@ void ADCsetup() {
   ADC->CTRLA.bit.ENABLE = true;
 }
 
+// Set up clock for ADC. ADC clock is configured to run at 48MHz
 void ADCClockSetup() {
 
   // Enable the 48MHz internal oscillator
@@ -88,6 +90,7 @@ void ADCClockSetup() {
   while (GCLK->STATUS.bit.SYNCBUSY);
 }
 
+// Set up timer to run ADC sampler
 void timerSetup() {
 
   // Run on general clock 4, divide by 1
@@ -127,6 +130,29 @@ void timerSetup() {
   NVIC_EnableIRQ(TCC0_IRQn);
 }
 
+// Set up DAC
+void DACSetup() {
+  // Use analog voltage supply as reference selection
+  DAC->CTRLB.bit.REFSEL = 1;
+
+  // Enable output buffer
+  DAC->CTRLB.bit.EOEN = 1;
+
+  // Enable DAC
+  DACOn();
+}
+
+inline void DACOn() {
+  // Enable DAC
+  DAC->CTRLA.bit.ENABLE = 1;
+}
+
+inline void DACOff() {
+  // Disable DAC
+  DAC->CTRLA.bit.ENABLE = 0;
+}
+
+
 // This is the interrupt service routine (ISR) that is called
 // if an ADC measurement falls out of the range of the window
 void ADC_Handler() {
@@ -142,27 +168,8 @@ void ADC_Handler() {
   ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY; //Need to reset interrupt
 }
 
-void DACOn() {
-  // Enable DAC
-  DAC->CTRLA.bit.ENABLE = 1;
-}
-
-void DACOff() {
-  // Disable DAC
-  DAC->CTRLA.bit.ENABLE = 0;
-}
-
-void DACSetup() {
-  // Use analog voltage supply as reference selection
-  DAC->CTRLB.bit.REFSEL = 1;
-
-  // Enable output buffer
-  DAC->CTRLB.bit.EOEN = 1;
-
-  // Enable DAC
-  DACOn();
-}
-
+// This is the interrupt service routine (ISR) that is called
+// periodically by the timer, based on the sampling rate
 void TCC0_Handler() {
 
   counter++;
