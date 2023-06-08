@@ -1,6 +1,15 @@
 #include "avr/interrupt.h"
+#include "core_cm0plus.h"
+
+const int SAMPLING_RATE = 10000;
 
 volatile int measurement = 0;
+
+volatile int counter = 0;
+
+volatile int previousCounter = 0;
+
+volatile unsigned long time = millis();
 
 void ADCsetup() {
 
@@ -18,8 +27,8 @@ void ADCsetup() {
   */
   ADC->AVGCTRL.reg = ADC_AVGCTRL_SAMPLENUM_1;
 
-  /* Set the clock prescaler to 512, which will run the ADC at
-    8 Mhz / 512 = 31.25 kHz.
+  /* Set the clock prescaler to 16, which will run the ADC at
+    8 Mhz / 16 = 500 kHz.
     Set the resolution to 10bit.
   */
   ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV16 | ADC_CTRLB_RESSEL_10BIT | ADC_CTRLB_FREERUN;
@@ -77,6 +86,45 @@ void ADCClockSetup() {
   while (GCLK->STATUS.bit.SYNCBUSY);
 }
 
+void timerSetup() {
+
+  // Run on general clock 4, divide by 1
+  GCLK->GENDIV.reg = GCLK_GENDIV_ID(4) | GCLK_GENDIV_DIV(1);
+
+  // Enable, set clock to DFLL 48 MHz clock source, select GCLK4
+  GCLK->GENCTRL.reg = GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(4);
+
+  // Wait for bus synchronization
+  while (GCLK->STATUS.bit.SYNCBUSY);
+
+  // Enable, route GCLK4 to timer 4
+  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK4 | GCLK_CLKCTRL_ID_TCC0_TCC1;
+
+  // Set wave generation to match frequency
+  TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_MFRQ;
+
+  // Wait for bus synchronization
+  while (TCC0->SYNCBUSY.bit.WAVE);
+
+  // Set counter compare value based on sampling rate
+  TCC0->CC[0].reg = 48000000 / SAMPLING_RATE;
+
+  // Wait for bus synchronization
+  while (TCC0->SYNCBUSY.bit.CC0);
+
+  // Enable interrupt on compare match value
+  TCC0->INTENSET.bit.MC0 = 1;
+
+  // Enable TCC0
+  TCC0->CTRLA.bit.ENABLE = 1;
+
+  // Wait for bus synchronization
+  while (TCC0->SYNCBUSY.bit.ENABLE);
+
+  // Enable IRQ for TCC0
+  NVIC_EnableIRQ(TCC0_IRQn);
+}
+
 // This is the interrupt service routine (ISR) that is called
 // if an ADC measurement falls out of the range of the window
 void ADC_Handler() {
@@ -111,9 +159,18 @@ void DACSetup() {
   DACOn();
 }
 
+void TCC0_Handler() {
+
+  counter++;
+
+  // Reset interrupt flag
+  TCC0->INTFLAG.bit.MC0 = 1;
+}
+
 void setup() {
   Serial.begin(9600);
 
+  timerSetup();
   ADCClockSetup();
   ADCsetup();
   DACSetup();
@@ -122,4 +179,17 @@ void setup() {
 }
 
 void loop() {
+
+  const int INTERVAL_MS = 1000;
+  if (unsigned long currentTime = millis(); currentTime - time >= INTERVAL_MS) {
+
+    Serial.print(currentTime);
+    Serial.print(" ms: counter=");
+    Serial.print(counter);
+    Serial.print(", diff=");
+    Serial.println(counter - previousCounter);
+
+    time = currentTime;
+    previousCounter = counter;
+  }
 }
