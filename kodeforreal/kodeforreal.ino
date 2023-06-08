@@ -7,7 +7,7 @@ volatile int measurement = 0;
 
 volatile int cumulativeMeasurement = 0;
 
-volatile int counter = 0;
+volatile unsigned int counter = 0;
 
 volatile int previousCounter = 0;
 
@@ -18,24 +18,21 @@ void ADCsetup() {
   // Set up clock before anything else
   ADCClockSetup();
 
-  /* Wait for bus synchronization. */
+  // Wait for bus synchronization.
   while (GCLK->STATUS.bit.SYNCBUSY);
 
-  /* Use the internal VCC reference. This is 1/2 of what's on VCCA.
-    since VCCA is typically 3.3v, this is 1.65v.
-  */
+  // Use the internal VCC reference. This is 1/2 of what's on VCCA.
+  // since VCCA is typically 3.3v, this is 1.65v.
   ADC->REFCTRL.reg = ADC_REFCTRL_REFSEL_INTVCC1;
 
-  /* Only capture one sample. The ADC can actually capture and average multiple
-    samples for better accuracy, but there's no need to do that for this
-    example.
-  */
+  // Only capture one sample. The ADC can actually capture and average multiple
+  // samples for better accuracy, but there's no need to do that for this
+  // example.
   ADC->AVGCTRL.reg = ADC_AVGCTRL_SAMPLENUM_1;
 
-  /* Set the clock prescaler to 16, which will run the ADC at
-    8 Mhz / 16 = 500 kHz.
-    Set the resolution to 10bit.
-  */
+  // Set the clock prescaler to 16, which will run the ADC at
+  // 8 Mhz / 16 = 500 kHz.
+  // Set the resolution to 10bit.
   ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV16 | ADC_CTRLB_RESSEL_10BIT;
 
   /* Configure the input parameters.
@@ -52,24 +49,24 @@ void ADCsetup() {
   ADC->INPUTCTRL.reg = ADC_INPUTCTRL_GAIN_DIV2 | ADC_INPUTCTRL_MUXNEG_GND |
                        ADC_INPUTCTRL_MUXPOS_PIN4;
 
-  /* Set PA04 as an input pin. */
+  // Set PA04 as an input pin.
   PORT->Group[1].DIRCLR.reg = PORT_PA04;
 
-  /* Enable the peripheral multiplexer for PA04. */
+  // Enable the peripheral multiplexer for PA04.
   PORT->Group[1].PINCFG[9].reg |= PORT_PINCFG_PMUXEN;
 
-  /* Set PA04 to function B which is analog input. */
+  // Set PA04 to function B which is analog input.
   PORT->Group[1].PMUX[4].reg = PORT_PMUX_PMUXO_B;
 
-  /* Enable interrupt for ready conversion interrupt, Result Conversion Ready:
-   * RESRDY*/
+  // Enable interrupt for ready conversion interrupt, Result Conversion Ready:
+  // RESRDY
   ADC->INTENSET.reg |= ADC_INTENSET_RESRDY;
   NVIC_EnableIRQ(ADC_IRQn); // enable ADC interrupts
 
-  /* Wait for bus synchronization. */
+  // Wait for bus synchronization.
   while (ADC->STATUS.bit.SYNCBUSY);
 
-  /* Enable the ADC. */
+  // Enable the ADC.
   ADC->CTRLA.bit.ENABLE = true;
 }
 
@@ -183,8 +180,6 @@ void setup() {
   timerSetup();
   ADCsetup();
   DACSetup();
-
-  while (GCLK->STATUS.bit.SYNCBUSY);
 }
 
 void loop() {
