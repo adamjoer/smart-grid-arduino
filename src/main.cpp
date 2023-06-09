@@ -1,3 +1,5 @@
+#include <Arduino.h>
+
 #include "avr/interrupt.h"
 #include "core_cm0plus.h"
 
@@ -25,6 +27,13 @@ volatile unsigned int sampleCounter = 0;
 volatile int previousSampleCounter;
 
 volatile unsigned long time = millis();
+
+// Forward declaration of functions
+void ADCClockSetup();
+
+inline void DACOn();
+
+inline void DACOff();
 
 // Set up ADC. ADC Listens on port A3 (PA04)
 void ADCsetup() {
@@ -214,7 +223,9 @@ void setup() {
 void loop() {
 
   const int INTERVAL_MS = 1000;
-  if (unsigned long currentTime = millis(); currentTime - time >= INTERVAL_MS) {
+
+  unsigned long currentTime = millis();
+  if (currentTime - time >= INTERVAL_MS) {
 
     int diff = sampleCounter - previousSampleCounter;
 
