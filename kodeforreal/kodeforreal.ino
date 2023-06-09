@@ -3,6 +3,7 @@
 
 // Constant for ADC sampling
 constexpr int SAMPLING_RATE = 10000;
+constexpr int GENERATION_RATE= 10000;
 
 // Constants for low pass filter
 constexpr int CUTOFF_FREQ = 50;
@@ -10,6 +11,12 @@ constexpr int CUTOFF_FREQ = 50;
 constexpr float RC = 1 / (2 * PI * CUTOFF_FREQ);
 
 constexpr float ALPHA = (1 / SAMPLING_RATE) / (RC + (1 / SAMPLING_RATE));
+
+//FOR THE SINE WAVE DAC TIME
+const int WAVE_SAMPLES_COUNT = 4096;
+
+int sinWaveSamples[WAVE_SAMPLES_COUNT] = {0};
+
 
 // Global variables
 volatile int rawMeasurement = 0;
@@ -143,6 +150,46 @@ void timerSetup() {
   NVIC_EnableIRQ(TCC0_IRQn);
 }
 
+void DACtimerSetup() {
+  // Run on general clock 6, divide by 1
+  GCLK->GENDIV.reg = GCLK_GENDIV_ID(6) | GCLK_GENDIV_DIV(1);
+
+  // Enable, set clock to DFLL 48 MHz clock source, select GCL6
+  GCLK->GENCTRL.reg = GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(6);
+
+  // Wait for bus synchronization
+  while (GCLK->STATUS.bit.SYNCBUSY);
+
+  // Enable, route GCLK6 to timer TCC2
+  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK6 | GCLK_CLKCTRL_ID_TCC2_TC3;
+
+  // Set wave generation to match frequency
+  TCC2->WAVE.reg = TCC_WAVE_WAVEGEN_MFRQ;
+
+  // Wait for bus synchronization
+  while (TCC2->SYNCBUSY.bit.WAVE);
+
+  // Set counter compare value based on clock speed and sampling rate
+  TCC2->CC[0].reg = 48e6 / GENERATION_RATE;
+
+  // Wait for bus synchronization
+  while (TCC2->SYNCBUSY.bit.CC0);
+
+  // Enable interrupt on compare match value
+  TCC2->INTENSET.bit.MC0 = 1;
+
+  // Enable TCC0
+  TCC2->CTRLA.bit.ENABLE = 1;
+
+  // Wait for bus synchronization
+  while (TCC2->SYNCBUSY.bit.ENABLE);
+
+  // Enable IRQ for TCC0
+  NVIC_EnableIRQ(TCC2_IRQn);
+}
+
+
+
 // Set up DAC
 void DACSetup() {
   // Use analog voltage supply as reference selection
@@ -192,6 +239,17 @@ void ADC_Handler() {
 
 // This is the interrupt service routine (ISR) that is called
 // periodically by the timer, based on the sampling rate
+void TCC2_Handler() {
+
+  // Start ADC conversion
+  DAC->DATA.reg = ;
+
+  // Reset interrupt flag
+  TCC2->INTFLAG.bit.MC0 = 1;
+}
+
+// This is the interrupt service routine (ISR) that is called
+// periodically by the timer, based on the sampling rate
 void TCC0_Handler() {
 
   sampleCounter++;
@@ -203,12 +261,31 @@ void TCC0_Handler() {
   TCC0->INTFLAG.bit.MC0 = 1;
 }
 
+
+void generateSineWaveSamples() {
+  const float PI2 = 3.14159 * 2;
+
+  for (int i = 0; i < WAVE_SAMPLES_COUNT; ++i) {
+
+    //calculate value in radians for sin()
+    float in = PI2 * (1 / (float) WAVE_SAMPLES_COUNT) * (float) i;
+
+    // Calculate sine wave value and offset based on DAC resolution 511.5 = 1023/2
+    sinWaveSamples[i] = ((int) (sin(in) * 511.5 + 511.5));
+  }
+}
+
+
 void setup() {
   Serial.begin(9600);
 
+  DACtimersetup();
   timerSetup();
   ADCsetup();
   DACSetup();
+
+  generateSineWaveSamples();
+
 }
 
 void loop() {
