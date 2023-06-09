@@ -5,22 +5,24 @@
 
 // Constant for ADC sampling
 constexpr int SAMPLING_RATE = 10000;
-constexpr int GENERATION_RATE= 10000;
+constexpr int GENERATION_RATE = 5000;
 
 // Constants for low pass filter
 constexpr int CUTOFF_FREQ = 50;
 
 constexpr float RC = 1 / (2 * PI * CUTOFF_FREQ);
 
-constexpr float ALPHA = (1 / SAMPLING_RATE) / (RC + (1 / SAMPLING_RATE));
+constexpr float ALPHA = (1.0 / SAMPLING_RATE) / (RC + (1.0 / SAMPLING_RATE));
 
 //FOR THE SINE WAVE DAC TIME
 const int WAVE_SAMPLES_COUNT = 4096;
 
+// Global variables
+
+volatile int DACCounter = 0;
+
 int sinWaveSamples[WAVE_SAMPLES_COUNT] = {0};
 
-
-// Global variables
 volatile int rawMeasurement = 0;
 
 volatile int cumulativeRawMeasurement = 0;
@@ -29,7 +31,7 @@ volatile float filterOutput = 0;
 
 volatile int previousFilterOutput;
 
-volatile unsigned int sampleCounter = 0;
+volatile int sampleCounter = 0;
 
 volatile int previousSampleCounter;
 
@@ -201,6 +203,9 @@ void DACtimerSetup() {
 
 // Set up DAC
 void DACSetup() {
+
+  DACtimerSetup();
+
   // Use analog voltage supply as reference selection
   DAC->CTRLB.bit.REFSEL = 1;
 
@@ -221,7 +226,6 @@ inline void DACOff() {
   DAC->CTRLA.bit.ENABLE = 0;
 }
 
-
 inline float lowPassFilter(float xn, float yn1) {
   return ALPHA * xn + (1 - ALPHA) * yn1;
 }
@@ -239,19 +243,16 @@ void ADC_Handler() {
 
   filterOutput = lowPassFilter((float) rawMeasurement, (float) previousFilterOutput);
 
-  // Input ADC measurement in DAC
-  DAC->DATA.reg = rawMeasurement;
-
   // Reset ADC interrupt
   ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY;
 }
 
 // This is the interrupt service routine (ISR) that is called
-// periodically by the timer, based on the sampling rate
+//
 void TCC2_Handler() {
 
-  // Start ADC conversion
-  DAC->DATA.reg = ;
+  DAC->DATA.reg = sinWaveSamples[DACCounter];
+  DACCounter = (DACCounter + 1) % WAVE_SAMPLES_COUNT;
 
   // Reset interrupt flag
   TCC2->INTFLAG.bit.MC0 = 1;
@@ -270,7 +271,6 @@ void TCC0_Handler() {
   TCC0->INTFLAG.bit.MC0 = 1;
 }
 
-
 void generateSineWaveSamples() {
   const float PI2 = 3.14159 * 2;
 
@@ -284,17 +284,14 @@ void generateSineWaveSamples() {
   }
 }
 
-
 void setup() {
   Serial.begin(9600);
 
-  DACtimersetup();
   timerSetup();
   ADCsetup();
   DACSetup();
 
   generateSineWaveSamples();
-
 }
 
 void loop() {
