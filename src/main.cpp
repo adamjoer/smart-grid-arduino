@@ -5,20 +5,20 @@
 
 // Constant for ADC sampling
 constexpr int SAMPLING_RATE = 10000;
-constexpr int GENERATION_RATE = 5000;
+constexpr int GENERATION_RATE = 51200;
+constexpr int ZERO = 511;
 
 // Constants for low pass filter
-constexpr int CUTOFF_FREQ = 50;
+constexpr int CUTOFF_FREQ = 80;
 
-constexpr float RC = 1 / (2 * PI * CUTOFF_FREQ);
+constexpr float RC = 1.0 / (2 * PI * CUTOFF_FREQ);
 
 constexpr float ALPHA = (1.0 / SAMPLING_RATE) / (RC + (1.0 / SAMPLING_RATE));
 
-//FOR THE SINE WAVE DAC TIME
-const int WAVE_SAMPLES_COUNT = 4096;
+// FOR THE SINE WAVE DAC TIME
+const int WAVE_SAMPLES_COUNT = 1024;
 
 // Global variables
-
 volatile int DACCounter = 0;
 
 int sinWaveSamples[WAVE_SAMPLES_COUNT] = {0};
@@ -27,7 +27,7 @@ volatile int rawMeasurement = 0;
 
 volatile int cumulativeRawMeasurement = 0;
 
-volatile float filterOutput = 0;
+volatile int filterOutput = 0;
 
 volatile int previousFilterOutput;
 
@@ -35,19 +35,27 @@ volatile int sampleCounter = 0;
 
 volatile int previousSampleCounter;
 
+volatile int samplesPerPeriod = 0;
+
 volatile unsigned long time = millis();
 
+volatile float frequency = 0;
+
 // Forward declaration of functions
-void ADCClockSetup();
+void TCC0Setup();
 
 inline void DACOn();
 
 inline void DACOff();
 
+void ADCClockSetup();
+
 // Set up ADC. ADC Listens on port A3 (PA04)
 void ADCsetup() {
 
   // Set up clock before anything else
+  TCC0Setup();
+
   ADCClockSetup();
 
   // Wait for bus synchronization.
@@ -109,20 +117,21 @@ void ADCClockSetup() {
   SYSCTRL->DFLLCTRL.reg = SYSCTRL_DFLLCTRL_ENABLE;
 
   // Setup clock GCLK3 for no div factor
-   GCLK->GENDIV.reg |= GCLK_GENDIV_ID(3)| GCLK_GENDIV_DIV(1);
-   while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+  GCLK->GENDIV.reg |= GCLK_GENDIV_ID(3) | GCLK_GENDIV_DIV(1);
+  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
 
-  //configure the generator of the generic clock, which is 48MHz clock
+  // configure the generator of the generic clock, which is 48MHz clock
   GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_DIVSEL;
   while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
 
-  //enable clock, set gen clock number, and ID to where the clock goes (30 is ADC)
+  // enable clock, set gen clock number, and ID to where the clock goes (30 is ADC)
   GCLK->CLKCTRL.reg |= GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(3) | GCLK_CLKCTRL_ID(30);
   while (GCLK->STATUS.bit.SYNCBUSY);
 }
 
 // Set up timer to run ADC sampler
-void timerSetup() {
+// Runs on GCLK4
+void TCC0Setup() {
 
   // Run on general clock 4, divide by 1
   GCLK->GENDIV.reg = GCLK_GENDIV_ID(4) | GCLK_GENDIV_DIV(1);
@@ -161,7 +170,27 @@ void timerSetup() {
   NVIC_EnableIRQ(TCC0_IRQn);
 }
 
-void DACtimerSetup() {
+void DACClockSetup(){
+  // Enable the 48MHz internal oscillator
+  SYSCTRL->DFLLCTRL.reg = SYSCTRL_DFLLCTRL_ENABLE;
+
+  // Setup clock GCLK5 for no div factor
+  GCLK->GENDIV.reg |= GCLK_GENDIV_ID(5) | GCLK_GENDIV_DIV(1);
+  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+
+  // configure the generator of the generic clock, which is 48MHz clock
+  GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(5) | GCLK_GENCTRL_DIVSEL;
+  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+
+  // enable clock, set gen clock number, and ID to where the clock goes (33 is DAC)
+  GCLK->CLKCTRL.reg |= GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(5) | GCLK_CLKCTRL_ID(33);
+  while (GCLK->STATUS.bit.SYNCBUSY);
+}
+
+// Set up timer to run DAC.
+// This runs on GCLK6
+void TCC2Setup() {
+
   // Run on general clock 6, divide by 1
   GCLK->GENDIV.reg = GCLK_GENDIV_ID(6) | GCLK_GENDIV_DIV(1);
 
@@ -180,7 +209,7 @@ void DACtimerSetup() {
   // Wait for bus synchronization
   while (TCC2->SYNCBUSY.bit.WAVE);
 
-  // Set counter compare value based on clock speed and sampling rate
+  // Set counter compare value based on clock speed and generation rate
   TCC2->CC[0].reg = 48e6 / GENERATION_RATE;
 
   // Wait for bus synchronization
@@ -199,12 +228,13 @@ void DACtimerSetup() {
   NVIC_EnableIRQ(TCC2_IRQn);
 }
 
-
-
 // Set up DAC
 void DACSetup() {
 
-  DACtimerSetup();
+  // Set up timer before anything else
+  TCC2Setup();
+
+  DACClockSetup();
 
   // Use analog voltage supply as reference selection
   DAC->CTRLB.bit.REFSEL = 1;
@@ -230,6 +260,10 @@ inline float lowPassFilter(float xn, float yn1) {
   return ALPHA * xn + (1 - ALPHA) * yn1;
 }
 
+inline float calculateFrequency(int nSamples) {
+  return (1.0f / ((1.0f / (float)SAMPLING_RATE) * (float)nSamples)) / 2.0f;
+}
+
 // This is the interrupt service routine (ISR) that is called
 // if an ADC measurement falls out of the range of the window
 void ADC_Handler() {
@@ -241,7 +275,15 @@ void ADC_Handler() {
 
   previousFilterOutput = filterOutput;
 
-  filterOutput = lowPassFilter((float) rawMeasurement, (float) previousFilterOutput);
+  filterOutput = lowPassFilter((float)rawMeasurement, (float)previousFilterOutput);
+
+  samplesPerPeriod++;
+  if ((previousFilterOutput < ZERO && filterOutput >= ZERO) ||
+      (previousFilterOutput > ZERO && filterOutput <= ZERO)) {
+
+    frequency = calculateFrequency(samplesPerPeriod);
+    samplesPerPeriod = 0;
+  }
 
   // Reset ADC interrupt
   ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY;
@@ -272,26 +314,23 @@ void TCC0_Handler() {
 }
 
 void generateSineWaveSamples() {
-  const float PI2 = 3.14159 * 2;
-
   for (int i = 0; i < WAVE_SAMPLES_COUNT; ++i) {
 
-    //calculate value in radians for sin()
-    float in = PI2 * (1 / (float) WAVE_SAMPLES_COUNT) * (float) i;
+    // calculate value in radians for sin()
+    float in = PI * 2 * (1 / (float)WAVE_SAMPLES_COUNT) * (float)i;
 
     // Calculate sine wave value and offset based on DAC resolution 511.5 = 1023/2
-    sinWaveSamples[i] = ((int) (sin(in) * 511.5 + 511.5));
+    sinWaveSamples[i] = ((int)(sin(in) * 511.5 + 511.5));
   }
 }
 
 void setup() {
   Serial.begin(9600);
 
-  timerSetup();
+  generateSineWaveSamples();
+
   ADCsetup();
   DACSetup();
-
-  generateSineWaveSamples();
 }
 
 void loop() {
@@ -312,6 +351,8 @@ void loop() {
     Serial.print(cumulativeRawMeasurement / diff);
     Serial.print(", filterOutput=");
     Serial.print(filterOutput);
+    Serial.print(", frequency=");
+    Serial.print(frequency);
 
     Serial.println();
 
