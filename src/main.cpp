@@ -37,27 +37,35 @@ volatile int previousSampleCounter;
 
 volatile int samplesPerPeriod = 0;
 
-volatile unsigned long time = millis();
+volatile float interpolatedZeroCrossing = 0;
+
+volatile unsigned long previousTime = millis();
 
 volatile float frequency = 0;
 
 // Set up clock for ADC. ADC clock is configured to run at 48MHz
 void ADCClockSetup() {
 
-  // Enable the 48MHz internal oscillator
-  SYSCTRL->DFLLCTRL.reg = SYSCTRL_DFLLCTRL_ENABLE;
+  SYSCTRL->OSC8M.reg = SYSCTRL_OSC8M_ENABLE;
+
 
   // Setup clock GCLK3 for no div factor
   GCLK->GENDIV.reg |= GCLK_GENDIV_ID(3) | GCLK_GENDIV_DIV(1);
-  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
+    ;
 
   // configure the generator of the generic clock, which is 48MHz clock
-  GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_DIVSEL;
-  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+  GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_OSC8M |
+                       GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_DIVSEL;
+  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
+    ;
 
-  // enable clock, set gen clock number, and ID to where the clock goes (30 is ADC)
-  GCLK->CLKCTRL.reg |= GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(3) | GCLK_CLKCTRL_ID(30);
-  while (GCLK->STATUS.bit.SYNCBUSY);
+  // enable clock, set gen clock number, and ID to where the clock goes (30 is
+  // ADC)
+  GCLK->CLKCTRL.reg |=
+      GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(3) | GCLK_CLKCTRL_ID(30);
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;
 }
 
 // Set up timer to run ADC sampler
@@ -67,26 +75,31 @@ void TCC0Setup() {
   // Run on general clock 4, divide by 1
   GCLK->GENDIV.reg = GCLK_GENDIV_ID(4) | GCLK_GENDIV_DIV(1);
 
-  // Enable, set clock to DFLL 48 MHz clock source, select GCLK4
-  GCLK->GENCTRL.reg = GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(4);
+  // Enable, set clock to OSC8 MHz clock source, select GCLK4
+  GCLK->GENCTRL.reg =
+      GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_ID(4);
 
   // Wait for bus synchronization
-  while (GCLK->STATUS.bit.SYNCBUSY);
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;
 
   // Enable, route GCLK4 to timer 4
-  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK4 | GCLK_CLKCTRL_ID_TCC0_TCC1;
+  GCLK->CLKCTRL.reg =
+      GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK4 | GCLK_CLKCTRL_ID_TCC0_TCC1;
 
   // Set wave generation to match frequency
   TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_MFRQ;
 
   // Wait for bus synchronization
-  while (TCC0->SYNCBUSY.bit.WAVE);
+  while (TCC0->SYNCBUSY.bit.WAVE)
+    ;
 
   // Set counter compare value based on clock speed and sampling rate
-  TCC0->CC[0].reg = 48e6 / SAMPLING_RATE;
+  TCC0->CC[0].reg = 8e6 / SAMPLING_RATE;
 
   // Wait for bus synchronization
-  while (TCC0->SYNCBUSY.bit.CC0);
+  while (TCC0->SYNCBUSY.bit.CC0)
+    ;
 
   // Enable interrupt on compare match value
   TCC0->INTENSET.bit.MC0 = 1;
@@ -95,7 +108,8 @@ void TCC0Setup() {
   TCC0->CTRLA.bit.ENABLE = 1;
 
   // Wait for bus synchronization
-  while (TCC0->SYNCBUSY.bit.ENABLE);
+  while (TCC0->SYNCBUSY.bit.ENABLE)
+    ;
 
   // Enable IRQ for TCC0
   NVIC_EnableIRQ(TCC0_IRQn);
@@ -110,7 +124,8 @@ void ADCsetup() {
   ADCClockSetup();
 
   // Wait for bus synchronization.
-  while (GCLK->STATUS.bit.SYNCBUSY);
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;
 
   // Use the internal VCC reference. This is 1/2 of what's on VCCA.
   // since VCCA is typically 3.3v, this is 1.65v.
@@ -155,27 +170,34 @@ void ADCsetup() {
   NVIC_EnableIRQ(ADC_IRQn); // enable ADC interrupts
 
   // Wait for bus synchronization.
-  while (ADC->STATUS.bit.SYNCBUSY);
+  while (ADC->STATUS.bit.SYNCBUSY)
+    ;
 
   // Enable the ADC.
   ADC->CTRLA.bit.ENABLE = true;
 }
 
-void DACClockSetup(){
+void DACClockSetup() {
   // Enable the 48MHz internal oscillator
   SYSCTRL->DFLLCTRL.reg = SYSCTRL_DFLLCTRL_ENABLE;
 
   // Setup clock GCLK5 for no div factor
   GCLK->GENDIV.reg |= GCLK_GENDIV_ID(5) | GCLK_GENDIV_DIV(1);
-  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
+    ;
 
   // configure the generator of the generic clock, which is 48MHz clock
-  GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(5) | GCLK_GENCTRL_DIVSEL;
-  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+  GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M |
+                       GCLK_GENCTRL_ID(5) | GCLK_GENCTRL_DIVSEL;
+  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
+    ;
 
-  // enable clock, set gen clock number, and ID to where the clock goes (33 is DAC)
-  GCLK->CLKCTRL.reg |= GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(5) | GCLK_CLKCTRL_ID(33);
-  while (GCLK->STATUS.bit.SYNCBUSY);
+  // enable clock, set gen clock number, and ID to where the clock goes (33 is
+  // DAC)
+  GCLK->CLKCTRL.reg |=
+      GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(5) | GCLK_CLKCTRL_ID(33);
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;
 }
 
 // Set up timer to run DAC.
@@ -186,25 +208,30 @@ void TCC2Setup() {
   GCLK->GENDIV.reg = GCLK_GENDIV_ID(6) | GCLK_GENDIV_DIV(1);
 
   // Enable, set clock to DFLL 48 MHz clock source, select GCL6
-  GCLK->GENCTRL.reg = GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(6);
+  GCLK->GENCTRL.reg =
+      GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(6);
 
   // Wait for bus synchronization
-  while (GCLK->STATUS.bit.SYNCBUSY);
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;
 
   // Enable, route GCLK6 to timer TCC2
-  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK6 | GCLK_CLKCTRL_ID_TCC2_TC3;
+  GCLK->CLKCTRL.reg =
+      GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK6 | GCLK_CLKCTRL_ID_TCC2_TC3;
 
   // Set wave generation to match frequency
   TCC2->WAVE.reg = TCC_WAVE_WAVEGEN_MFRQ;
 
   // Wait for bus synchronization
-  while (TCC2->SYNCBUSY.bit.WAVE);
+  while (TCC2->SYNCBUSY.bit.WAVE)
+    ;
 
   // Set counter compare value based on clock speed and generation rate
   TCC2->CC[0].reg = 48e6 / GENERATION_RATE;
 
   // Wait for bus synchronization
-  while (TCC2->SYNCBUSY.bit.CC0);
+  while (TCC2->SYNCBUSY.bit.CC0)
+    ;
 
   // Enable interrupt on compare match value
   TCC2->INTENSET.bit.MC0 = 1;
@@ -213,7 +240,8 @@ void TCC2Setup() {
   TCC2->CTRLA.bit.ENABLE = 1;
 
   // Wait for bus synchronization
-  while (TCC2->SYNCBUSY.bit.ENABLE);
+  while (TCC2->SYNCBUSY.bit.ENABLE)
+    ;
 
   // Enable IRQ for TCC0
   NVIC_EnableIRQ(TCC2_IRQn);
@@ -251,8 +279,12 @@ inline float lowPassFilter(float xn, float yn1) {
   return ALPHA * xn + (1 - ALPHA) * yn1;
 }
 
-inline float calculateFrequency(int nSamples) {
-  return (1.0f / ((1.0f / (float)SAMPLING_RATE) * (float)nSamples)) / 2.0f;
+inline float calculateFrequency(float nSamples) {
+  return (1.0f / ((1.0f / (float)SAMPLING_RATE) * nSamples)) /*/ 2.0f*/;
+}
+
+inline float linearInterpolation(int y, int oldY, int time) {
+  return (float)time - (float)(y - ZERO) / (float)((y - ZERO) - (oldY - ZERO));
 }
 
 // This is the interrupt service routine (ISR) that is called
@@ -266,13 +298,18 @@ void ADC_Handler() {
 
   previousFilterOutput = filterOutput;
 
-  filterOutput = lowPassFilter((float)rawMeasurement, (float)previousFilterOutput);
+  filterOutput =
+      lowPassFilter((float)rawMeasurement, (float)previousFilterOutput);
 
   samplesPerPeriod++;
-  if ((previousFilterOutput < ZERO && filterOutput >= ZERO) ||
-      (previousFilterOutput > ZERO && filterOutput <= ZERO)) {
+  if ((previousFilterOutput < ZERO && filterOutput >= ZERO)/* ||
+      (previousFilterOutput > ZERO && filterOutput <= ZERO)*/) {
 
-    frequency = calculateFrequency(samplesPerPeriod);
+    interpolatedZeroCrossing = linearInterpolation(
+        filterOutput, previousFilterOutput, samplesPerPeriod);
+
+    frequency = calculateFrequency(interpolatedZeroCrossing);
+
     samplesPerPeriod = 0;
   }
 
@@ -310,7 +347,8 @@ void generateSineWaveSamples() {
     // calculate value in radians for sin()
     float in = PI * 2 * (1 / (float)WAVE_SAMPLES_COUNT) * (float)i;
 
-    // Calculate sine wave value and offset based on DAC resolution 511.5 = 1023/2
+    // Calculate sine wave value and offset based on DAC resolution 511.5 =
+    // 1023/2
     sinWaveSamples[i] = ((int)(sin(in) * 511.5 + 511.5));
   }
 }
@@ -318,18 +356,30 @@ void generateSineWaveSamples() {
 void setup() {
   Serial.begin(9600);
 
-  generateSineWaveSamples();
+  //  generateSineWaveSamples();
 
   ADCsetup();
-  DACSetup();
+  //  DACSetup();
 }
 
+// int k = 0;
+
 void loop() {
+
+  /*
+    if (k++ % 3 == 0) {
+      Serial.print(frequency);
+      Serial.print(',');
+      Serial.print(interpolatedZeroCrossing);
+
+      Serial.println();
+    }
+  */
 
   const int INTERVAL_MS = 1000;
 
   unsigned long currentTime = millis();
-  if (currentTime - time >= INTERVAL_MS) {
+  if (currentTime - previousTime >= INTERVAL_MS) {
 
     int diff = sampleCounter - previousSampleCounter;
 
@@ -344,11 +394,13 @@ void loop() {
     Serial.print(filterOutput);
     Serial.print(", frequency=");
     Serial.print(frequency);
+    Serial.print(", interpolatedZeroCrossing=");
+    Serial.print(interpolatedZeroCrossing);
 
     Serial.println();
 
     cumulativeRawMeasurement = 0;
-    time = currentTime;
+    previousTime = currentTime;
     previousSampleCounter = sampleCounter;
   }
 }
