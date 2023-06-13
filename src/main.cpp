@@ -56,95 +56,92 @@ void ADCClockSetup() {
     while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
         ;
 
-  // configure the generator of the generic clock, which is 48MHz clock
-  GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M |
-                       GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_DIVSEL;
-  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
-    ;
+    // configure the generator of the generic clock, which is 48MHz clock
+    GCLK->GENCTRL.reg |= GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M |
+                         GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_DIVSEL;
+    while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
+        ;
 
-  // enable clock, set gen clock number, and ID to where the clock goes (30 is
-  // ADC)
-  GCLK->CLKCTRL.reg |=
-      GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(3) | GCLK_CLKCTRL_ID(30);
-  while (GCLK->STATUS.bit.SYNCBUSY)
-    ;
+    // enable clock, set gen clock number, and ID to where the clock goes (30 is
+    // ADC)
+    GCLK->CLKCTRL.reg |= GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(3) | GCLK_CLKCTRL_ID(30);
+    while (GCLK->STATUS.bit.SYNCBUSY)
+        ;
 }
 
 // Set up timer to run ADC sampler
 // Runs on GCLK4
 void TCC0Setup() {
 
-  // Run on general clock 4, divide by 1
-  GCLK->GENDIV.reg = GCLK_GENDIV_ID(4) | GCLK_GENDIV_DIV(1);
+    // Run on general clock 4, divide by 1
+    GCLK->GENDIV.reg = GCLK_GENDIV_ID(4) | GCLK_GENDIV_DIV(1);
 
-  // Enable, set clock to OSC8 MHz clock source, select GCLK4
-  GCLK->GENCTRL.reg =
-      GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_ID(4);
+    // Enable, set clock to OSC8 MHz clock source, select GCLK4
+    GCLK->GENCTRL.reg = GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_ID(4);
 
-  // Wait for bus synchronization
-  while (GCLK->STATUS.bit.SYNCBUSY)
-    ;
+    // Wait for bus synchronization
+    while (GCLK->STATUS.bit.SYNCBUSY)
+        ;
 
-  // Enable, route GCLK4 to timer 4
-  GCLK->CLKCTRL.reg =
-      GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK4 | GCLK_CLKCTRL_ID_TCC0_TCC1;
+    // Enable, route GCLK4 to timer 4
+    GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK4 | GCLK_CLKCTRL_ID_TCC0_TCC1;
 
-  // Set wave generation to match frequency
-  TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_MFRQ;
+    // Set wave generation to match frequency
+    TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_MFRQ;
 
-  // Wait for bus synchronization
-  while (TCC0->SYNCBUSY.bit.WAVE)
-    ;
+    // Wait for bus synchronization
+    while (TCC0->SYNCBUSY.bit.WAVE)
+        ;
 
-  // Set counter compare value based on clock speed and sampling rate
-  TCC0->CC[0].reg = 8e6 / SAMPLING_RATE;
+    // Set counter compare value based on clock speed and sampling rate
+    TCC0->CC[0].reg = 8e6 / SAMPLING_RATE;
 
-  // Wait for bus synchronization
-  while (TCC0->SYNCBUSY.bit.CC0)
-    ;
+    // Wait for bus synchronization
+    while (TCC0->SYNCBUSY.bit.CC0)
+        ;
 
-  // Enable interrupt on compare match value
-  TCC0->INTENSET.bit.MC0 = 1;
+    // Enable interrupt on compare match value
+    TCC0->INTENSET.bit.MC0 = 1;
 
-  // Enable TCC0
-  TCC0->CTRLA.bit.ENABLE = 1;
+    // Enable TCC0
+    TCC0->CTRLA.bit.ENABLE = 1;
 
-  // Wait for bus synchronization
-  while (TCC0->SYNCBUSY.bit.ENABLE)
-    ;
+    // Wait for bus synchronization
+    while (TCC0->SYNCBUSY.bit.ENABLE)
+        ;
 
-  // Enable IRQ for TCC0
-  NVIC_EnableIRQ(TCC0_IRQn);
-  NVIC_SetPriority(TCC0_IRQn,3);
+    // Enable IRQ for TCC0
+    NVIC_EnableIRQ(TCC0_IRQn);
+    NVIC_SetPriority(TCC0_IRQn, 3);
 }
 
 // Set up ADC. ADC Listens on port A3 (PA04)
 void ADCsetup() {
 
-  // Set up clock before anything else
-  TCC0Setup();
+    // Set up clock before anything else
+    TCC0Setup();
 
-  ADCClockSetup();
+    ADCClockSetup();
 
-  // Wait for bus synchronization.
-  while (GCLK->STATUS.bit.SYNCBUSY)
-    ;
+    // Wait for bus synchronization.
+    while (GCLK->STATUS.bit.SYNCBUSY)
+        ;
 
-  // Use the internal VCC reference. This is 1/2 of what's on VCCA.
-  // since VCCA is typically 3.3v, this is 1.65v.
-  ADC->REFCTRL.reg = ADC_REFCTRL_REFSEL_INTVCC1;
+    // Use the internal VCC reference. This is 1/2 of what's on VCCA.
+    // since VCCA is typically 3.3v, this is 1.65v.
+    ADC->REFCTRL.reg = ADC_REFCTRL_REFSEL_INTVCC1;
 
-  // Only capture one sample. The ADC can actually capture and average multiple
-  // samples for better accuracy, but there's no need to do that for this
-  // example.
-  ADC->AVGCTRL.reg = ADC_AVGCTRL_SAMPLENUM_1;
+    // Only capture one sample. The ADC can actually capture and average multiple
+    // samples for better accuracy, but there's no need to do that for this
+    // example.
+    ADC->AVGCTRL.reg = ADC_AVGCTRL_SAMPLENUM_1;
 
-  // Set the clock prescaler to 16, which will run the ADC at
-  // 48 Mhz / 16 = 3MHz.
-  // Set the resolution to 10bit.
-  ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV16 | ADC_CTRLB_RESSEL_10BIT;
+    // Set the clock prescaler to 16, which will run the ADC at
+    // 48 Mhz / 16 = 3MHz.
+    // Set the resolution to 10bit.
+    ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV16 | ADC_CTRLB_RESSEL_10BIT;
 
-  /* Configure the input parameters.
+    /* Configure the input parameters.
 
     - GAIN_DIV2 means that the input voltage is halved. This is important
       because the voltage reference is 1/2 of VCCA. So if you want to
@@ -155,29 +152,29 @@ void ADCsetup() {
     - MUXPOST_PIN3 means that the ADC should read from AIN3, or PA04.
       This is A2 on the Feather M0 board.
   */
-  ADC->INPUTCTRL.reg = ADC_INPUTCTRL_GAIN_DIV2 | ADC_INPUTCTRL_MUXNEG_GND |
-                       ADC_INPUTCTRL_MUXPOS_PIN4;
+    ADC->INPUTCTRL.reg = ADC_INPUTCTRL_GAIN_DIV2 | ADC_INPUTCTRL_MUXNEG_GND |
+                         ADC_INPUTCTRL_MUXPOS_PIN4;
 
-  // Set PA04 as an input pin.
-  PORT->Group[1].DIRCLR.reg = PORT_PA04;
+    // Set PA04 as an input pin.
+    PORT->Group[1].DIRCLR.reg = PORT_PA04;
 
-  // Enable the peripheral multiplexer for PA04.
-  PORT->Group[1].PINCFG[9].reg |= PORT_PINCFG_PMUXEN;
+    // Enable the peripheral multiplexer for PA04.
+    PORT->Group[1].PINCFG[9].reg |= PORT_PINCFG_PMUXEN;
 
-  // Set PA04 to function B which is analog input.
-  PORT->Group[1].PMUX[4].reg = PORT_PMUX_PMUXO_B;
+    // Set PA04 to function B which is analog input.
+    PORT->Group[1].PMUX[4].reg = PORT_PMUX_PMUXO_B;
 
-  // Enable interrupt for ready conversion interrupt, Result Conversion Ready:
-  // RESRDY
-  ADC->INTENSET.reg |= ADC_INTENSET_RESRDY;
-  NVIC_EnableIRQ(ADC_IRQn); // enable ADC interrupts
-  NVIC_SetPriority(ADC_IRQn,0);
-  // Wait for bus synchronization.
-  while (ADC->STATUS.bit.SYNCBUSY)
-    ;
+    // Enable interrupt for ready conversion interrupt, Result Conversion Ready:
+    // RESRDY
+    ADC->INTENSET.reg |= ADC_INTENSET_RESRDY;
+    NVIC_EnableIRQ(ADC_IRQn);// enable ADC interrupts
+    NVIC_SetPriority(ADC_IRQn, 0);
+    // Wait for bus synchronization.
+    while (ADC->STATUS.bit.SYNCBUSY)
+        ;
 
-  // Enable the ADC.
-  ADC->CTRLA.bit.ENABLE = true;
+    // Enable the ADC.
+    ADC->CTRLA.bit.ENABLE = true;
 }
 
 void DACClockSetup() {
@@ -211,8 +208,7 @@ void TCC2Setup() {
     GCLK->GENDIV.reg = GCLK_GENDIV_ID(6) | GCLK_GENDIV_DIV(1);
 
     // Enable, set clock to DFLL 48 MHz clock source, select GCL6
-    GCLK->GENCTRL.reg =
-            GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(6);
+    GCLK->GENCTRL.reg = GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(6);
 
     // Wait for bus synchronization
     while (GCLK->STATUS.bit.SYNCBUSY)
@@ -279,133 +275,131 @@ void DACSetup() {
 }
 
 
-
 inline float lowPassFilter(float xn, float yn1) {
-  return ALPHA * xn + (1 - ALPHA) * yn1;
+    return ALPHA * xn + (1 - ALPHA) * yn1;
 }
 
 inline float calculateFrequency(float nSamples) {
-  return (1.0f / ((1.0f / (float)SAMPLING_RATE) * nSamples)) /*/ 2.0f*/;
+    return (1.0f / ((1.0f / (float) SAMPLING_RATE) * nSamples)) /*/ 2.0f*/;
 }
 
 inline float linearInterpolation(int y, int oldY, int time) {
-  return (float)time - (float)(y - ZERO) / (float)((y - ZERO) - (oldY - ZERO));
+    return (float) time - (float) (y - ZERO) / (float) ((y - ZERO) - (oldY - ZERO));
 }
 
 // This is the interrupt service routine (ISR) that is called
 // if an ADC measurement falls out of the range of the window
 void ADC_Handler() {
 
-  // Save ADC measurement
-  rawMeasurement = ADC->RESULT.reg;
+    // Save ADC measurement
+    rawMeasurement = ADC->RESULT.reg;
 
-  cumulativeRawMeasurement += rawMeasurement;
+    cumulativeRawMeasurement += rawMeasurement;
 
-  previousFilterOutput = filterOutput;
+    previousFilterOutput = filterOutput;
 
-  filterOutput =
-      lowPassFilter((float)rawMeasurement, (float)previousFilterOutput);
-  samplesPerPeriod++;
+    filterOutput = lowPassFilter((float) rawMeasurement, (float) previousFilterOutput);
+    samplesPerPeriod++;
 
 
-  if ((previousFilterOutput < ZERO && filterOutput >= ZERO)) {
+    if ((previousFilterOutput < ZERO && filterOutput >= ZERO)) {
 
-    interpolatedZeroCrossing = linearInterpolation(
-        filterOutput, previousFilterOutput, samplesPerPeriod);
+        interpolatedZeroCrossing = linearInterpolation(
+                filterOutput, previousFilterOutput, samplesPerPeriod);
 
-    frequency = calculateFrequency(interpolatedZeroCrossing);
+        frequency = calculateFrequency(interpolatedZeroCrossing);
 
-    samplesPerPeriod = 0;
-  }
+        samplesPerPeriod = 0;
+    }
 
-  // Reset ADC interrupt
-  ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY;
+    // Reset ADC interrupt
+    ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY;
 }
 
 // This is the interrupt service routine (ISR) that is called
 //
 void TCC2_Handler() {
 
-  DAC->DATA.reg = sinWaveSamples[DACCounter];
-  DACCounter = (DACCounter + 1) % WAVE_SAMPLES_COUNT;
+    DAC->DATA.reg = sinWaveSamples[DACCounter];
+    DACCounter = (DACCounter + 1) % WAVE_SAMPLES_COUNT;
 
-  // Reset interrupt flag
-  TCC2->INTFLAG.bit.MC0 = 1;
+    // Reset interrupt flag
+    TCC2->INTFLAG.bit.MC0 = 1;
 }
 
 // This is the interrupt service routine (ISR) that is called
 // periodically by the timer, based on the sampling rate
 void TCC0_Handler() {
 
-  sampleCounter++;
+    sampleCounter++;
 
-  // Start ADC conversion
-  ADC->SWTRIG.bit.START = 1;
+    // Start ADC conversion
+    ADC->SWTRIG.bit.START = 1;
 
-  // Reset interrupt flag
-  TCC0->INTFLAG.bit.MC0 = 1;
+    // Reset interrupt flag
+    TCC0->INTFLAG.bit.MC0 = 1;
 }
 
 void generateSineWaveSamples() {
-  for (int i = 0; i < WAVE_SAMPLES_COUNT; ++i) {
+    for (int i = 0; i < WAVE_SAMPLES_COUNT; ++i) {
 
-    // calculate value in radians for sin()
-    float in = PI * 2 * (1 / (float)WAVE_SAMPLES_COUNT) * (float)i;
+        // calculate value in radians for sin()
+        float in = PI * 2 * (1 / (float) WAVE_SAMPLES_COUNT) * (float) i;
 
-    // Calculate sine wave value and offset based on DAC resolution 511.5 =
-    // 1023/2
-    sinWaveSamples[i] = ((int)(sin(in) * 511.5 + 511.5));
-  }
+        // Calculate sine wave value and offset based on DAC resolution 511.5 =
+        // 1023/2
+        sinWaveSamples[i] = ((int) (sin(in) * 511.5 + 511.5));
+    }
 }
 
 void setup() {
-  Serial.begin(9600);
+    Serial.begin(9600);
 
-  lcd.begin(16, 2);
-  lcd.setCursor(0, 0);
-  lcd.print("Frequency:");
+    lcd.begin(16, 2);
+    lcd.setCursor(0, 0);
+    lcd.print("Frequency:");
 
     //  generateSineWaveSamples();
 
-  ADCsetup();
-  //  DACSetup();
+    ADCsetup();
+    //  DACSetup();
 }
 
 
 void loop() {
 
-  char frequencyBuffer[16];
-  char outputBuffer[16];
-  snprintf(outputBuffer, sizeof(outputBuffer), "%s Hz", dtostrf(frequency, 5, 4, frequencyBuffer));
+    char frequencyBuffer[16];
+    char outputBuffer[16];
+    snprintf(outputBuffer, sizeof(outputBuffer), "%s Hz", dtostrf(frequency, 5, 4, frequencyBuffer));
 
-  lcd.setCursor(0, 1);
-  lcd.print(outputBuffer);
+    lcd.setCursor(0, 1);
+    lcd.print(outputBuffer);
 
-  const int INTERVAL_MS = 1000;
+    const int INTERVAL_MS = 1000;
 
-  unsigned long currentTime = millis();
-  if (currentTime - previousTime >= INTERVAL_MS) {
+    unsigned long currentTime = millis();
+    if (currentTime - previousTime >= INTERVAL_MS) {
 
-    int diff = sampleCounter - previousSampleCounter;
+        int diff = sampleCounter - previousSampleCounter;
 
-    Serial.print(currentTime);
-    Serial.print(" ms: counter=");
-    Serial.print(sampleCounter);
-    Serial.print(", diff=");
-    Serial.print(diff);
-    Serial.print(", avg=");
-    Serial.print(cumulativeRawMeasurement / diff);
-    Serial.print(", filterOutput=");
-    Serial.print(filterOutput);
-    Serial.print(", frequency=");
-    Serial.print(frequency,4);
-    Serial.print(", interpolatedZeroCrossing=");
-    Serial.print(interpolatedZeroCrossing);
+        Serial.print(currentTime);
+        Serial.print(" ms: counter=");
+        Serial.print(sampleCounter);
+        Serial.print(", diff=");
+        Serial.print(diff);
+        Serial.print(", avg=");
+        Serial.print(cumulativeRawMeasurement / diff);
+        Serial.print(", filterOutput=");
+        Serial.print(filterOutput);
+        Serial.print(", frequency=");
+        Serial.print(frequency, 4);
+        Serial.print(", interpolatedZeroCrossing=");
+        Serial.print(interpolatedZeroCrossing);
 
-    Serial.println();
+        Serial.println();
 
-    cumulativeRawMeasurement = 0;
-    previousTime = currentTime;
-    previousSampleCounter = sampleCounter;
-  }
+        cumulativeRawMeasurement = 0;
+        previousTime = currentTime;
+        previousSampleCounter = sampleCounter;
+    }
 }
