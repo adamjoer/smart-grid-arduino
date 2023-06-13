@@ -1,3 +1,4 @@
+#include "thingProperties.h"
 #include <Arduino.h>
 #include <LiquidCrystal.h>
 #include "avr/dtostrf.h"
@@ -41,8 +42,6 @@ volatile int samplesPerPeriod = 0;
 volatile float interpolatedZeroCrossing = 0;
 
 volatile unsigned long previousTime = millis();
-
-volatile float frequency = 0;
 
 LiquidCrystal lcd(10, 8, 5, 4, 3, 2);
 
@@ -353,7 +352,26 @@ void generateSineWaveSamples() {
 }
 
 void setup() {
+    // Initialize serial and wait for port to open:
     Serial.begin(9600);
+    // This delay gives the chance to wait for a Serial Monitor without blocking if none is found
+    delay(1500);
+
+    // Defined in thingProperties.h
+    initProperties();
+
+    // Connect to Arduino IoT Cloud
+    ArduinoCloud.begin(ArduinoIoTPreferredConnection);
+
+    /*
+     The following function allows you to obtain more information
+     related to the state of network and IoT Cloud connection and errors
+     the higher number the more granular information you’ll get.
+     The default is 0 (only errors).
+     Maximum is 4
+    */
+    setDebugMessageLevel(2);
+    ArduinoCloud.printDebugInfo();
 
     lcd.begin(16, 2);
     lcd.setCursor(0, 0);
@@ -365,8 +383,8 @@ void setup() {
     //  DACSetup();
 }
 
-
 void loop() {
+    ArduinoCloud.update();
 
     char frequencyBuffer[16];
     char outputBuffer[16];

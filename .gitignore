@@ -152,4 +152,5 @@ fabric.properties
 .pio
 CMakeListsPrivate.txt
 cmake-build-*/ 
+include/credentials.h
 
