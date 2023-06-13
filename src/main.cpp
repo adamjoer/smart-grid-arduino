@@ -1,5 +1,6 @@
 #include <Arduino.h>
-
+#include <LiquidCrystal.h>
+#include "avr/dtostrf.h"
 #include "avr/interrupt.h"
 #include "core_cm0plus.h"
 
@@ -40,6 +41,8 @@ volatile int samplesPerPeriod = 0;
 volatile unsigned long time = millis();
 
 volatile float frequency = 0;
+
+LiquidCrystal lcd(10, 8, 5, 4, 3, 2);
 
 // Set up clock for ADC. ADC clock is configured to run at 48MHz
 void ADCClockSetup() {
@@ -318,6 +321,10 @@ void generateSineWaveSamples() {
 void setup() {
   Serial.begin(9600);
 
+  lcd.begin(16, 2);
+  lcd.setCursor(0, 0);
+  lcd.print("Frequency:");
+
   generateSineWaveSamples();
 
   ADCsetup();
@@ -325,6 +332,13 @@ void setup() {
 }
 
 void loop() {
+
+  char frequencyBuffer[16];
+  char outputBuffer[16];
+  snprintf(outputBuffer, sizeof(outputBuffer), "%s Hz", dtostrf(frequency, 5, 2, frequencyBuffer));
+
+  lcd.setCursor(0, 1);
+  lcd.print(outputBuffer);
 
   const int INTERVAL_MS = 1000;
 
