@@ -26,19 +26,21 @@ int sinWaveSamples[WAVE_SAMPLES_COUNT] = {0};
 
 volatile int rawMeasurement = 0;
 
-volatile int cumulativeRawMeasurement = 0;
-
 volatile int filterOutput = 0;
+volatile int lockedFilterOutput = 0;
 
-volatile unsigned long cumulativeFilterOutput = 0;
+volatile int cumulativeFilterOutput = 0;
+volatile int lockedCumulativeFilterOutput = 0;
 
 volatile int previousFilterOutput;
+volatile int lockedPreviousFilterOutput = 0;
 
 volatile int sampleCounter = 0;
 
 volatile int previousSampleCounter;
 
 volatile int samplesPerPeriod = 0;
+volatile int lockedSamplesPerPeriod = 0;
 
 volatile float interpolatedZeroCrossing = 0;
 
@@ -49,10 +51,8 @@ volatile float frequency = 50;
 volatile float previousFrequency = 0;
 
 volatile float xrms = 0;
-volatile int maxRaw =0;
-volatile int maxVolt =0;
-volatile int minRaw= 0;
-volatile int minVolt=0;
+
+volatile bool zeroCrossingFlag = false;
 
 LiquidCrystal lcd(10, 8, 5, 4, 3, 2);
 
@@ -139,6 +139,16 @@ void ADCsetup() {
   // Wait for bus synchronization.
   while (GCLK->STATUS.bit.SYNCBUSY)
     ;
+
+  uint32_t bias = (*((uint32_t *) ADC_FUSES_BIASCAL_ADDR) & ADC_FUSES_BIASCAL_Msk) >> ADC_FUSES_BIASCAL_Pos;
+  uint32_t linearity = (*((uint32_t *) ADC_FUSES_LINEARITY_0_ADDR) & ADC_FUSES_LINEARITY_0_Msk) >> ADC_FUSES_LINEARITY_0_Pos;
+  linearity |= ((*((uint32_t *) ADC_FUSES_LINEARITY_1_ADDR) & ADC_FUSES_LINEARITY_1_Msk) >> ADC_FUSES_LINEARITY_1_Pos) << 5;
+
+  /* Wait for bus synchronization. */
+  while (ADC->STATUS.bit.SYNCBUSY) {};
+
+  /* Write the calibration data. */
+  ADC->CALIB.reg = ADC_CALIB_BIAS_CAL(bias) | ADC_CALIB_LINEARITY_CAL(linearity);
 
   // Use the internal VCC reference. This is 1/2 of what's on VCCA.
   // since VCCA is typically 3.3v, this is 1.65v.
@@ -274,7 +284,7 @@ inline void DACOff() {
 void DACSetup() {
 
   // Set up timer before anything else
-  TCC2Setup();
+  //  TCC2Setup();
 
   DACClockSetup();
 
@@ -307,41 +317,30 @@ void ADC_Handler() {
   // Save ADC measurement
   rawMeasurement = ADC->RESULT.reg;
 
-  cumulativeRawMeasurement += rawMeasurement;
+  // DAC->DATABUF.reg=rawMeasurement;
 
   previousFilterOutput = filterOutput;
 
-  if (rawMeasurement>maxRaw){
-    maxRaw=rawMeasurement;
-    maxVolt=(maxRaw/1024.0)*3.3;
-  }
-  if (rawMeasurement<minRaw){
-    minRaw=rawMeasurement;
-    minVolt=(minRaw/1024.0)*3.3;
-  }
-
   filterOutput = lowPassFilter(ALPHA, (float)rawMeasurement, (float)previousFilterOutput);
-  //cumulativeFilterOutput += (float)pow(((float)rawMeasurement/1024.0)*3.1,2);
+
+  // Maybe multiply with constant 1.41 something
+  cumulativeFilterOutput += ((int)(rawMeasurement)-511)*((int)(rawMeasurement)-511);
+
   samplesPerPeriod++;
 
   if ((previousFilterOutput < ZERO && filterOutput >= ZERO)) {
+    zeroCrossingFlag=true;
+    lockedCumulativeFilterOutput = cumulativeFilterOutput;
+    lockedFilterOutput = filterOutput;
+    lockedPreviousFilterOutput = previousFilterOutput;
+    lockedSamplesPerPeriod = samplesPerPeriod;
 
-    interpolatedZeroCrossing = linearInterpolation(
-        filterOutput, previousFilterOutput, samplesPerPeriod);
-
-    previousFrequency = frequency;
-    frequency = lowPassFilter(ALPHA, calculateFrequency(interpolatedZeroCrossing), previousFrequency);
-    //xrms=sqrt((1.0/interpolatedZeroCrossing)*cumulativeFilterOutput);
-    xrms=(((float)maxVolt-(float)minVolt)/2.0)/ sqrt(2);
-    cumulativeRawMeasurement = 0;
     samplesPerPeriod = 0;
-    cumulativeFilterOutput=0;
+    cumulativeFilterOutput = 0;
   }
 
   // Reset ADC interrupt
   ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY;
-
-  digitalWrite(1, LOW);
 }
 
 // This is the interrupt service routine (ISR) that is called
@@ -358,8 +357,6 @@ void TCC2_Handler() {
 // This is the interrupt service routine (ISR) that is called
 // periodically by the timer, based on the sampling rate
 void TCC0_Handler() {
-
-  digitalWrite(1, HIGH);
 
   sampleCounter++;
 
@@ -385,8 +382,6 @@ void generateSineWaveSamples() {
 void setup() {
   Serial.begin(9600);
 
-  pinMode(1, OUTPUT);
-
   lcd.begin(16, 2);
   lcd.setCursor(0, 0);
   lcd.print("Frequency:");
@@ -394,7 +389,7 @@ void setup() {
   //  generateSineWaveSamples();
 
   ADCsetup();
-  //  DACSetup();
+  // DACSetup();
 }
 
 void loop() {
@@ -405,6 +400,19 @@ void loop() {
 
   lcd.setCursor(0, 1);
   lcd.print(outputBuffer);
+
+  if (zeroCrossingFlag) {
+
+    interpolatedZeroCrossing = linearInterpolation(lockedFilterOutput, lockedPreviousFilterOutput, lockedSamplesPerPeriod);
+
+    previousFrequency = frequency;
+    frequency = lowPassFilter(ALPHA, calculateFrequency(interpolatedZeroCrossing), previousFrequency);
+    xrms = (float)sqrt((1.0 / interpolatedZeroCrossing) * (float)lockedCumulativeFilterOutput);
+    xrms = (xrms / 1023.0) * 3.1;
+    // xrms = (((float) maxVolt - (float) minVolt) / 2.0) / sqrt(2);
+    zeroCrossingFlag = false;
+  }
+
 
   const int INTERVAL_MS = 1000;
 
@@ -418,24 +426,19 @@ void loop() {
     Serial.print(sampleCounter);
     Serial.print(", diff=");
     Serial.print(diff);
-    Serial.print(", avg=");
-    Serial.print(cumulativeRawMeasurement / diff);
     Serial.print(", filterOutput=");
     Serial.print(filterOutput);
     Serial.print(", frequency=");
     Serial.print(frequency, 4);
     Serial.print(", interpolatedZeroCrossing=");
     Serial.print(interpolatedZeroCrossing);
+    Serial.print(", cumFilterOut");
+    Serial.print(lockedCumulativeFilterOutput);
     Serial.print(", XRMS=");
-    Serial.print(xrms);
-
-
+    Serial.print(xrms, 4);
     Serial.println();
-
 
     previousTime = currentTime;
     previousSampleCounter = sampleCounter;
   }
-
-
 }
