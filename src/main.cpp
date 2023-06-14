@@ -1,7 +1,17 @@
-#include "thingProperties.h"
+// Comment this out to disable connection to Arduino Cloud
+#define IOT_ENABLED
+
+// Comment this out to disable frequency output to LCD
+#define LCD_ENABLED
+
 #include <Arduino.h>
+#ifdef IOT_ENABLED
+#include "thingProperties.h"
+#endif
+#ifdef LCD_ENABLED
 #include <LiquidCrystal.h>
 #include "avr/dtostrf.h"
+#endif
 #include "avr/interrupt.h"
 #include "core_cm0plus.h"
 
@@ -21,6 +31,10 @@ constexpr float ALPHA = (1.0 / SAMPLING_RATE) / (RC + (1.0 / SAMPLING_RATE));
 constexpr int WAVE_SAMPLES_COUNT = 1024;
 
 // Global variables
+#ifndef IOT_ENABLED
+volatile float frequency;
+#endif
+
 volatile int DACCounter = 0;
 
 int sinWaveSamples[WAVE_SAMPLES_COUNT] = {0};
@@ -43,7 +57,9 @@ volatile float interpolatedZeroCrossing = 0;
 
 volatile unsigned long previousTime = millis();
 
+#ifdef LCD_ENABLED
 LiquidCrystal lcd(10, 8, 5, 4, 3, 2);
+#endif
 
 // Set up clock for ADC. ADC clock is configured to run at 48MHz
 void ADCClockSetup() {
@@ -273,7 +289,6 @@ void DACSetup() {
     DACOn();
 }
 
-
 inline float lowPassFilter(float xn, float yn1) {
     return ALPHA * xn + (1 - ALPHA) * yn1;
 }
@@ -315,6 +330,9 @@ void ADC_Handler() {
     ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY;
 }
 
+
+// FIXME: Why the fuck is this necessary
+#ifndef IOT_ENABLED
 // This is the interrupt service routine (ISR) that is called
 //
 void TCC2_Handler() {
@@ -325,6 +343,7 @@ void TCC2_Handler() {
     // Reset interrupt flag
     TCC2->INTFLAG.bit.MC0 = 1;
 }
+#endif
 
 // This is the interrupt service routine (ISR) that is called
 // periodically by the timer, based on the sampling rate
@@ -357,6 +376,7 @@ void setup() {
     // This delay gives the chance to wait for a Serial Monitor without blocking if none is found
     delay(1500);
 
+#ifdef IOT_ENABLED
     // Defined in thingProperties.h
     initProperties();
 
@@ -372,10 +392,13 @@ void setup() {
     */
     setDebugMessageLevel(2);
     ArduinoCloud.printDebugInfo();
+#endif
 
+#ifdef LCD_ENABLED
     lcd.begin(16, 2);
     lcd.setCursor(0, 0);
     lcd.print("Frequency:");
+#endif
 
     //  generateSineWaveSamples();
 
@@ -384,14 +407,18 @@ void setup() {
 }
 
 void loop() {
+#ifdef IOT_ENABLED
     ArduinoCloud.update();
+#endif
 
+#ifdef LCD_ENABLED
     char frequencyBuffer[16];
     char outputBuffer[16];
     snprintf(outputBuffer, sizeof(outputBuffer), "%s Hz", dtostrf(frequency, 5, 4, frequencyBuffer));
 
     lcd.setCursor(0, 1);
     lcd.print(outputBuffer);
+#endif
 
     const int INTERVAL_MS = 1000;
 
