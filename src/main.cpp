@@ -472,7 +472,7 @@ void loop() {
         previousFrequency = frequency;
         frequency = lowPassFilter(ALPHA, calculateFrequency(interpolatedZeroCrossing), previousFrequency);
         xrms = (float) sqrt((1.0 / interpolatedZeroCrossing) * (float) lockedCumulativeFilterOutput);
-        xrms = (xrms / 1023.0) * 3.1;
+        xrms = ((xrms / 1023.0) * 3.1)*212;
         // xrms = (((float) maxVolt - (float) minVolt) / 2.0) / sqrt(2);
 
 
