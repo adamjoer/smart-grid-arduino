@@ -461,7 +461,7 @@ void loop() {
         zeroCrossingFlag = false;
     }
 
-
+    /*
     const int INTERVAL_MS = 1000;
 
     unsigned long currentTime = millis();
@@ -490,4 +490,5 @@ void loop() {
         previousTime = currentTime;
         previousSampleCounter = sampleCounter;
     }
+    */
 }
