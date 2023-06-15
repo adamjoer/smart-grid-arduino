@@ -1,17 +1,20 @@
+#include <Arduino.h>
+
 // Comment this out to disable connection to Arduino Cloud
 #define IOT_ENABLED
 
 // Comment this out to disable frequency output to LCD
 #define LCD_ENABLED
 
-#include <Arduino.h>
 #ifdef IOT_ENABLED
 #include "thingProperties.h"
 #endif
+
 #ifdef LCD_ENABLED
 #include <LiquidCrystal.h>
 #include "avr/dtostrf.h"
 #endif
+
 #include "avr/interrupt.h"
 #include "core_cm0plus.h"
 
@@ -32,7 +35,8 @@ constexpr int WAVE_SAMPLES_COUNT = 1024;
 
 // Global variables
 #ifndef IOT_ENABLED
-volatile float frequency;
+volatile float frequency = 50;
+volatile float xrms = 1;
 #endif
 
 volatile int DACCounter = 0;
@@ -62,8 +66,6 @@ volatile float interpolatedZeroCrossing = 0;
 volatile unsigned long previousTime = millis();
 
 volatile float previousFrequency = 0;
-
-volatile float xrms = 0;
 
 volatile bool zeroCrossingFlag = false;
 
@@ -427,6 +429,7 @@ void setup() {
 }
 
 void loop() {
+
 #ifdef IOT_ENABLED
     ArduinoCloud.update();
 #endif

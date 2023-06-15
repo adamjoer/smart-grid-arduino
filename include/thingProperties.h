@@ -10,11 +10,14 @@
 const char SSID[] = SECRET_SSID;         // Network SSID (name)
 const char PASS[] = SECRET_OPTIONAL_PASS;// Network password (use for WPA, or use as key for WEP)
 
-float frequency;
+
+float frequency = 50;
+float xrms = 1;
 
 void initProperties() {
 
     ArduinoCloud.addProperty(frequency, READ, 1 * SECONDS, NULL);
+    ArduinoCloud.addProperty(xrms, READ, 1 * SECONDS, NULL);
 }
 
 WiFiConnectionHandler ArduinoIoTPreferredConnection(SSID, PASS);
