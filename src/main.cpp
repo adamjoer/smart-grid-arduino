@@ -70,7 +70,7 @@ volatile float previousFrequency = 0;
 volatile bool zeroCrossingFlag = false;
 
 #ifdef LCD_ENABLED
-LiquidCrystal lcd(10, 8, 5, 4, 3, 2);
+LiquidCrystal lcd(10, 8, 5, 4, 3, 1);
 #endif
 
 // Set up clock for ADC. ADC clock is configured to run at 48MHz
@@ -98,7 +98,7 @@ void ADCClockSetup() {
 
 // Set up timer to run ADC sampler
 // Runs on GCLK4
-void TCC0Setup() {
+void TC5Setup() {
 
     // Run on general clock 4, divide by 1
     GCLK->GENDIV.reg = GCLK_GENDIV_ID(4) | GCLK_GENDIV_DIV(1);
@@ -111,42 +111,42 @@ void TCC0Setup() {
         ;
 
     // Enable, route GCLK4 to timer 4
-    GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK4 | GCLK_CLKCTRL_ID_TCC0_TCC1;
+    GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK4 | GCLK_CLKCTRL_ID_TC4_TC5;
 
     // Set wave generation to match frequency
-    TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_MFRQ;
+    TC5->COUNT16.CTRLA.reg = TC_CTRLA_WAVEGEN_MFRQ;
 
     // Wait for bus synchronization
-    while (TCC0->SYNCBUSY.bit.WAVE)
+    while (TC5->COUNT16.STATUS.reg & TC_STATUS_SYNCBUSY)
         ;
 
     // Set counter compare value based on clock speed and sampling rate
-    TCC0->CC[0].reg = 8e6 / SAMPLING_RATE;
+    TC5->COUNT16.CC[0].reg = 8e6 / SAMPLING_RATE;
 
     // Wait for bus synchronization
-    while (TCC0->SYNCBUSY.bit.CC0)
+    while (TC5->COUNT16.STATUS.reg & TC_STATUS_SYNCBUSY)
         ;
 
     // Enable interrupt on compare match value
-    TCC0->INTENSET.bit.MC0 = 1;
+    TC5->COUNT16.INTENSET.bit.MC0 = 1;
 
-    // Enable TCC0
-    TCC0->CTRLA.bit.ENABLE = 1;
+    // Enable TC5
+    TC5->COUNT16.CTRLA.bit.ENABLE = 1;
 
     // Wait for bus synchronization
-    while (TCC0->SYNCBUSY.bit.ENABLE)
+    while (TC5->COUNT16.STATUS.reg & TC_STATUS_SYNCBUSY)
         ;
 
-    // Enable IRQ for TCC0
-    NVIC_EnableIRQ(TCC0_IRQn);
-    NVIC_SetPriority(TCC0_IRQn, 3);
+    // Enable IRQ for TC5
+    NVIC_EnableIRQ(TC5_IRQn);
+    NVIC_SetPriority(TC5_IRQn, 3);
 }
 
 // Set up ADC. ADC Listens on port A3 (PA04)
 void ADCsetup() {
 
     // Set up clock before anything else
-    TCC0Setup();
+    TC5Setup();
 
     ADCClockSetup();
 
@@ -159,7 +159,8 @@ void ADCsetup() {
     linearity |= ((*((uint32_t *) ADC_FUSES_LINEARITY_1_ADDR) & ADC_FUSES_LINEARITY_1_Msk) >> ADC_FUSES_LINEARITY_1_Pos) << 5;
 
     /* Wait for bus synchronization. */
-    while (ADC->STATUS.bit.SYNCBUSY) {};
+    while (ADC->STATUS.bit.SYNCBUSY)
+        ;
 
     /* Write the calibration data. */
     ADC->CALIB.reg = ADC_CALIB_BIAS_CAL(bias) | ADC_CALIB_LINEARITY_CAL(linearity);
@@ -272,14 +273,14 @@ void TCC2Setup() {
     // Enable interrupt on compare match value
     TCC2->INTENSET.bit.MC0 = 1;
 
-    // Enable TCC0
+    // Enable TCC2
     TCC2->CTRLA.bit.ENABLE = 1;
 
     // Wait for bus synchronization
     while (TCC2->SYNCBUSY.bit.ENABLE)
         ;
 
-    // Enable IRQ for TCC0
+    // Enable IRQ for TCC2
     NVIC_EnableIRQ(TCC2_IRQn);
 }
 
@@ -371,7 +372,7 @@ void TCC2_Handler() {
 
 // This is the interrupt service routine (ISR) that is called
 // periodically by the timer, based on the sampling rate
-void TCC0_Handler() {
+void TC5_Handler() {
 
     sampleCounter++;
 
@@ -379,7 +380,7 @@ void TCC0_Handler() {
     ADC->SWTRIG.bit.START = 1;
 
     // Reset interrupt flag
-    TCC0->INTFLAG.bit.MC0 = 1;
+    TC5->COUNT16.INTFLAG.bit.MC0 = 1;
 }
 
 void generateSineWaveSamples() {
