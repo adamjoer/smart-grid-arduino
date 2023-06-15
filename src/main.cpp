@@ -348,7 +348,7 @@ void ADC_Handler() {
     filterOutput = lowPassFilter(ALPHA, (float) rawMeasurement, (float) previousFilterOutput);
 
     // Maybe multiply with constant 1.41 something
-    cumulativeFilterOutput += ((int) (rawMeasurement) -511) * ((int) (rawMeasurement) -511);
+    cumulativeFilterOutput += ((int) (rawMeasurement * 1.055) - 511) * ((int) (rawMeasurement * 1.055) - 511);
 
     samplesPerPeriod++;
 
