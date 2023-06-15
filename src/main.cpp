@@ -418,8 +418,6 @@ void setup() {
 
 #ifdef LCD_ENABLED
     lcd.begin(16, 2);
-    lcd.setCursor(0, 0);
-    lcd.print("Frequency:");
 #endif
 
     //  generateSineWaveSamples();
@@ -436,7 +434,12 @@ void loop() {
 #ifdef LCD_ENABLED
     char frequencyBuffer[16];
     char outputBuffer[16];
-    snprintf(outputBuffer, sizeof(outputBuffer), "%s Hz", dtostrf(frequency, 5, 4, frequencyBuffer));
+    snprintf(outputBuffer, sizeof(outputBuffer), "f:   %s Hz", dtostrf(frequency, 5, 2, frequencyBuffer));
+
+    lcd.setCursor(0, 0);
+    lcd.print(outputBuffer);
+
+    snprintf(outputBuffer, sizeof(outputBuffer), "RMS: %s V", dtostrf(xrms, 4, 2, frequencyBuffer));
 
     lcd.setCursor(0, 1);
     lcd.print(outputBuffer);
