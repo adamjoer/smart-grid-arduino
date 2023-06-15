@@ -33,6 +33,20 @@ constexpr float ALPHA = (1.0 / SAMPLING_RATE) / (RC + (1.0 / SAMPLING_RATE));
 // FOR THE SINE WAVE DAC TIME
 constexpr int WAVE_SAMPLES_COUNT = 1024;
 
+// LED PINS
+constexpr int RED_LED_PIN = 9;
+constexpr int YELLOW_LED_PIN = 6;
+constexpr int GREEN_LED_PIN = 7;
+
+// H-BRIDGE MOTOR CONTROL PINS
+constexpr int DC_MOTER_CLOCKWISE_PIN =0;
+constexpr int DC_MOTER_COUNTER_CLOCKWISE_PIN =2;
+
+
+// Constants for frequency status output
+constexpr float LOWER_FREQUENCY_THRESSHOLD = 49.0f;
+constexpr float UPPER_FREQUENCY_THRESSHOLD = 51.0f;
+
 // Global variables
 #ifndef IOT_ENABLED
 volatile float frequency = 50;
@@ -401,6 +415,10 @@ void setup() {
     // This delay gives the chance to wait for a Serial Monitor without blocking if none is found
     delay(1500);
 
+    pinMode(RED_LED_PIN, OUTPUT);
+    pinMode(YELLOW_LED_PIN, OUTPUT);
+    pinMode(GREEN_LED_PIN, OUTPUT);
+
 #ifdef IOT_ENABLED
     // Defined in thingProperties.h
     initProperties();
@@ -458,6 +476,34 @@ void loop() {
         xrms = (float) sqrt((1.0 / interpolatedZeroCrossing) * (float) lockedCumulativeFilterOutput);
         xrms = (xrms / 1023.0) * 3.1;
         // xrms = (((float) maxVolt - (float) minVolt) / 2.0) / sqrt(2);
+
+
+        int redLedValue = LOW;
+        int yellowLedValue = LOW;
+        int greenLedValue = LOW;
+
+        int dcMotorClockwiseValue = LOW;
+        int dcMotorCounterClockwiseValue = LOW;
+
+        if (frequency < LOWER_FREQUENCY_THRESSHOLD) {
+            redLedValue = HIGH;
+            dcMotorClockwiseValue = HIGH;
+
+        } else if (frequency > UPPER_FREQUENCY_THRESSHOLD) {
+            yellowLedValue = HIGH;
+            dcMotorCounterClockwiseValue = HIGH;
+
+        } else {
+            greenLedValue = HIGH;
+        }
+
+        digitalWrite(RED_LED_PIN, redLedValue);
+        digitalWrite(YELLOW_LED_PIN, yellowLedValue);
+        digitalWrite(GREEN_LED_PIN, greenLedValue);
+
+        digitalWrite(DC_MOTER_CLOCKWISE_PIN, dcMotorClockwiseValue);
+        digitalWrite(DC_MOTER_COUNTER_CLOCKWISE_PIN, dcMotorCounterClockwiseValue);
+
         zeroCrossingFlag = false;
     }
 
