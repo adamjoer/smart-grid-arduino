@@ -42,15 +42,13 @@ constexpr int GREEN_LED_PIN = 7;
 constexpr int DC_MOTER_CLOCKWISE_PIN =0;
 constexpr int DC_MOTER_COUNTER_CLOCKWISE_PIN =2;
 
-
-// Constants for frequency status output
-constexpr float LOWER_FREQUENCY_THRESSHOLD = 49.0f;
-constexpr float UPPER_FREQUENCY_THRESSHOLD = 51.0f;
-
 // Global variables
+
 #ifndef IOT_ENABLED
 volatile float frequency = 50;
 volatile float xrms = 1;
+constexpr float lowerFrequencyThreshold = 49.0;
+constexpr float upperFrequencyThreshold = 51.0;
 #endif
 
 volatile int DACCounter = 0;
@@ -485,11 +483,11 @@ void loop() {
         int dcMotorClockwiseValue = LOW;
         int dcMotorCounterClockwiseValue = LOW;
 
-        if (frequency < LOWER_FREQUENCY_THRESSHOLD) {
+        if (frequency < lowerFrequencyThreshold) {
             redLedValue = HIGH;
             dcMotorClockwiseValue = HIGH;
 
-        } else if (frequency > UPPER_FREQUENCY_THRESSHOLD) {
+        } else if (frequency > upperFrequencyThreshold) {
             yellowLedValue = HIGH;
             dcMotorCounterClockwiseValue = HIGH;
 
