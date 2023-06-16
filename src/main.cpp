@@ -39,8 +39,8 @@ constexpr int YELLOW_LED_PIN = 6;
 constexpr int GREEN_LED_PIN = 7;
 
 // H-BRIDGE MOTOR CONTROL PINS
-constexpr int DC_MOTER_CLOCKWISE_PIN =0;
-constexpr int DC_MOTER_COUNTER_CLOCKWISE_PIN =2;
+constexpr int DC_MOTER_CLOCKWISE_PIN = 0;
+constexpr int DC_MOTER_COUNTER_CLOCKWISE_PIN = 2;
 
 // Global variables
 
@@ -367,7 +367,6 @@ void ADC_Handler() {
     ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY;
 }
 
-
 // FIXME: Why the fuck is this necessary
 #ifndef IOT_ENABLED
 // This is the interrupt service routine (ISR) that is called
@@ -451,20 +450,6 @@ void loop() {
     ArduinoCloud.update();
 #endif
 
-#ifdef LCD_ENABLED
-    char frequencyBuffer[16];
-    char outputBuffer[16];
-    snprintf(outputBuffer, sizeof(outputBuffer), "f:   %s Hz", dtostrf(frequency, 5, 2, frequencyBuffer));
-
-    lcd.setCursor(0, 0);
-    lcd.print(outputBuffer);
-
-    snprintf(outputBuffer, sizeof(outputBuffer), "RMS: %s V", dtostrf(xrms, 4, 2, frequencyBuffer));
-
-    lcd.setCursor(0, 1);
-    lcd.print(outputBuffer);
-#endif
-
     if (zeroCrossingFlag) {
 
         interpolatedZeroCrossing = linearInterpolation(lockedFilterOutput, lockedPreviousFilterOutput, lockedSamplesPerPeriod);
@@ -472,9 +457,21 @@ void loop() {
         previousFrequency = frequency;
         frequency = lowPassFilter(ALPHA, calculateFrequency(interpolatedZeroCrossing), previousFrequency);
         xrms = (float) sqrt((1.0 / interpolatedZeroCrossing) * (float) lockedCumulativeFilterOutput);
-        xrms = ((xrms / 1023.0) * 3.1)*212;
+        xrms = ((xrms / 1023.0) * 3.1) * 212;
         // xrms = (((float) maxVolt - (float) minVolt) / 2.0) / sqrt(2);
 
+#ifdef LCD_ENABLED
+        char formatNumberBuffer[16];
+        char outputBuffer[16];
+
+        snprintf(outputBuffer, sizeof(outputBuffer), "f:   %s Hz", dtostrf(frequency, 5, 2, formatNumberBuffer));
+        lcd.setCursor(0, 0);
+        lcd.print(outputBuffer);
+
+        snprintf(outputBuffer, sizeof(outputBuffer), "RMS: %s V", dtostrf(xrms, 4, 2, formatNumberBuffer));
+        lcd.setCursor(0, 1);
+        lcd.print(outputBuffer);
+#endif
 
         int redLedValue = LOW;
         int yellowLedValue = LOW;
