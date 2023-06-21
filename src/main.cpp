@@ -467,11 +467,11 @@ void loop() {
         char formatNumberBuffer[16];
         char outputBuffer[16];
 
-        snprintf(outputBuffer, sizeof(outputBuffer), "f:   %s Hz", dtostrf(frequency, 5, 2, formatNumberBuffer));
+        snprintf(outputBuffer, sizeof(outputBuffer), "f:   %s Hz", dtostrf(frequency, 5, 3, formatNumberBuffer));
         lcd.setCursor(0, 0);
         lcd.print(outputBuffer);
 
-        snprintf(outputBuffer, sizeof(outputBuffer), "RMS: %s V", dtostrf(xrms, 4, 2, formatNumberBuffer));
+        snprintf(outputBuffer, sizeof(outputBuffer), "RMS: %s V", dtostrf(xrms, 5, 2, formatNumberBuffer));
         lcd.setCursor(0, 1);
         lcd.print(outputBuffer);
 #endif
