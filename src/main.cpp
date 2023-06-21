@@ -416,6 +416,9 @@ void setup() {
     pinMode(YELLOW_LED_PIN, OUTPUT);
     pinMode(GREEN_LED_PIN, OUTPUT);
 
+    pinMode(DC_MOTOR_CLOCKWISE_PIN, OUTPUT);
+    pinMode(DC_MOTOR_COUNTER_CLOCKWISE_PIN, OUTPUT);
+
 #ifdef IOT_ENABLED
     // Defined in thingProperties.h
     initProperties();
