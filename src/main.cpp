@@ -39,8 +39,8 @@ constexpr int YELLOW_LED_PIN = 6;
 constexpr int GREEN_LED_PIN = 7;
 
 // H-BRIDGE MOTOR CONTROL PINS
-constexpr int DC_MOTER_CLOCKWISE_PIN = 0;
-constexpr int DC_MOTER_COUNTER_CLOCKWISE_PIN = 2;
+constexpr int DC_MOTOR_CLOCKWISE_PIN = 0;
+constexpr int DC_MOTOR_COUNTER_CLOCKWISE_PIN = 2;
 
 // Global variables
 
@@ -496,8 +496,8 @@ void loop() {
         digitalWrite(YELLOW_LED_PIN, yellowLedValue);
         digitalWrite(GREEN_LED_PIN, greenLedValue);
 
-        digitalWrite(DC_MOTER_CLOCKWISE_PIN, dcMotorClockwiseValue);
-        digitalWrite(DC_MOTER_COUNTER_CLOCKWISE_PIN, dcMotorCounterClockwiseValue);
+        digitalWrite(DC_MOTOR_CLOCKWISE_PIN, dcMotorClockwiseValue);
+        digitalWrite(DC_MOTOR_COUNTER_CLOCKWISE_PIN, dcMotorCounterClockwiseValue);
 
         zeroCrossingFlag = false;
     }
