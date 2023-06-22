@@ -20,7 +20,7 @@
 
 // Constant for ADC sampling
 constexpr int SAMPLING_RATE = 10000;
-constexpr int GENERATION_RATE = 51200;
+constexpr int SAMPLING_RATE_FREQ = 9975;
 constexpr int ZERO = 511;
 
 // Constants for low pass filter
@@ -29,9 +29,6 @@ constexpr int CUTOFF_FREQ = 50;
 constexpr float RC = 1.0 / (2 * PI * CUTOFF_FREQ);
 
 constexpr float ALPHA = (1.0 / SAMPLING_RATE) / (RC + (1.0 / SAMPLING_RATE));
-
-// FOR THE SINE WAVE DAC TIME
-constexpr int WAVE_SAMPLES_COUNT = 1024;
 
 // LED PINS
 constexpr int RED_LED_PIN = 9;
@@ -50,10 +47,6 @@ volatile float xrms = 1;
 constexpr float lowerFrequencyThreshold = 49.0;
 constexpr float upperFrequencyThreshold = 51.0;
 #endif
-
-volatile int DACCounter = 0;
-
-int sinWaveSamples[WAVE_SAMPLES_COUNT] = {0};
 
 volatile int rawMeasurement = 0;
 
@@ -250,52 +243,6 @@ void DACClockSetup() {
         ;
 }
 
-// Set up timer to run DAC.
-// This runs on GCLK6
-void TCC2Setup() {
-
-    // Run on general clock 6, divide by 1
-    GCLK->GENDIV.reg = GCLK_GENDIV_ID(6) | GCLK_GENDIV_DIV(1);
-
-    // Enable, set clock to DFLL 48 MHz clock source, select GCL6
-    GCLK->GENCTRL.reg = GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_DFLL48M | GCLK_GENCTRL_ID(6);
-
-    // Wait for bus synchronization
-    while (GCLK->STATUS.bit.SYNCBUSY)
-        ;
-
-    // Enable, route GCLK6 to timer TCC2
-    GCLK->CLKCTRL.reg =
-            GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK6 | GCLK_CLKCTRL_ID_TCC2_TC3;
-
-    // Set wave generation to match frequency
-    TCC2->WAVE.reg = TCC_WAVE_WAVEGEN_MFRQ;
-
-    // Wait for bus synchronization
-    while (TCC2->SYNCBUSY.bit.WAVE)
-        ;
-
-    // Set counter compare value based on clock speed and generation rate
-    TCC2->CC[0].reg = 48e6 / GENERATION_RATE;
-
-    // Wait for bus synchronization
-    while (TCC2->SYNCBUSY.bit.CC0)
-        ;
-
-    // Enable interrupt on compare match value
-    TCC2->INTENSET.bit.MC0 = 1;
-
-    // Enable TCC2
-    TCC2->CTRLA.bit.ENABLE = 1;
-
-    // Wait for bus synchronization
-    while (TCC2->SYNCBUSY.bit.ENABLE)
-        ;
-
-    // Enable IRQ for TCC2
-    NVIC_EnableIRQ(TCC2_IRQn);
-}
-
 inline void DACOn() {
     // Enable DAC
     DAC->CTRLA.bit.ENABLE = 1;
@@ -308,9 +255,6 @@ inline void DACOff() {
 
 // Set up DAC
 void DACSetup() {
-
-    // Set up timer before anything else
-    //  TCC2Setup();
 
     DACClockSetup();
 
@@ -329,7 +273,7 @@ inline float lowPassFilter(float alpha, float xn, float yn1) {
 }
 
 inline float calculateFrequency(float nSamples) {
-    return (1.0f / ((1.0f / (float) 9968) * nSamples));
+    return (1.0f / ((1.0f / (float) SAMPLING_RATE_FREQ) * nSamples));
 }
 
 inline float linearInterpolation(int y, int oldY, int time) {
@@ -367,20 +311,6 @@ void ADC_Handler() {
     ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY;
 }
 
-// FIXME: Why the fuck is this necessary
-#ifndef IOT_ENABLED
-// This is the interrupt service routine (ISR) that is called
-//
-void TCC2_Handler() {
-
-    DAC->DATA.reg = sinWaveSamples[DACCounter];
-    DACCounter = (DACCounter + 1) % WAVE_SAMPLES_COUNT;
-
-    // Reset interrupt flag
-    TCC2->INTFLAG.bit.MC0 = 1;
-}
-#endif
-
 // This is the interrupt service routine (ISR) that is called
 // periodically by the timer, based on the sampling rate
 void TC5_Handler() {
@@ -392,18 +322,6 @@ void TC5_Handler() {
 
     // Reset interrupt flag
     TC5->COUNT16.INTFLAG.bit.MC0 = 1;
-}
-
-void generateSineWaveSamples() {
-    for (int i = 0; i < WAVE_SAMPLES_COUNT; ++i) {
-
-        // calculate value in radians for sin()
-        float in = PI * 2 * (1 / (float) WAVE_SAMPLES_COUNT) * (float) i;
-
-        // Calculate sine wave value and offset based on DAC resolution 511.5 =
-        // 1023/2
-        sinWaveSamples[i] = ((int) (sin(in) * 511.5 + 511.5));
-    }
 }
 
 void setup() {
@@ -440,8 +358,6 @@ void setup() {
 #ifdef LCD_ENABLED
     lcd.begin(16, 2);
 #endif
-
-    //  generateSineWaveSamples();
 
     ADCsetup();
     // DACSetup();
