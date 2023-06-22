@@ -53,22 +53,18 @@ volatile int rawMeasurement = 0;
 volatile int filterOutput = 0;
 volatile int lockedFilterOutput = 0;
 
-volatile int cumulativeFilterOutput = 0;
-volatile int lockedCumulativeFilterOutput = 0;
+volatile int cumulativeXSquared = 0;
+volatile int lockedCumulativeXSquared = 0;
 
 volatile int previousFilterOutput;
 volatile int lockedPreviousFilterOutput = 0;
 
 volatile int sampleCounter = 0;
 
-volatile int previousSampleCounter;
-
 volatile int samplesPerPeriod = 0;
 volatile int lockedSamplesPerPeriod = 0;
 
 volatile float interpolatedZeroCrossing = 0;
-
-volatile unsigned long previousTime = millis();
 
 volatile float previousFrequency = 0;
 
@@ -284,27 +280,30 @@ inline float linearInterpolation(int y, int oldY, int time) {
 // if an ADC measurement falls out of the range of the window
 void ADC_Handler() {
 
-    // Save ADC measurement
+    // Save ADC measurement in an int
     rawMeasurement = ADC->RESULT.reg;
 
     previousFilterOutput = filterOutput;
 
+    // Use lowPassFilter to smooth out the measurements
     filterOutput = lowPassFilter(ALPHA, (float) rawMeasurement, (float) previousFilterOutput);
 
-    // Maybe multiply with constant 1.41 something
-    cumulativeFilterOutput += ((int) (rawMeasurement * 1.055) - 511) * ((int) (rawMeasurement * 1.055) - 511);
+    // each rawMeasurement minus ''zero'' to get ''negative'' values. And Multiplied by a small constant
+    cumulativeXSquared += ((int) (rawMeasurement * 1.055) - ZERO) * ((int) (rawMeasurement * 1.055) - ZERO);
 
     samplesPerPeriod++;
-
+    // The zero crossing logic, going from negative to positive measurements
     if ((previousFilterOutput < ZERO && filterOutput >= ZERO)) {
         zeroCrossingFlag = true;
-        lockedCumulativeFilterOutput = cumulativeFilterOutput;
+        // lock the values to have the variables ready for
+        // the calculations in main and prevent overwriting of data
+        lockedCumulativeXSquared = cumulativeXSquared;
         lockedFilterOutput = filterOutput;
         lockedPreviousFilterOutput = previousFilterOutput;
         lockedSamplesPerPeriod = samplesPerPeriod;
 
         samplesPerPeriod = 0;
-        cumulativeFilterOutput = 0;
+        cumulativeXSquared = 0;
     }
 
     // Reset ADC interrupt
@@ -330,6 +329,7 @@ void setup() {
     // This delay gives the chance to wait for a Serial Monitor without blocking if none is found
     delay(1500);
 
+    // Call the LEDs and motor digital pins as outputs.
     pinMode(RED_LED_PIN, OUTPUT);
     pinMode(YELLOW_LED_PIN, OUTPUT);
     pinMode(GREEN_LED_PIN, OUTPUT);
@@ -375,9 +375,8 @@ void loop() {
 
         previousFrequency = frequency;
         frequency = lowPassFilter(ALPHA, calculateFrequency(interpolatedZeroCrossing), previousFrequency);
-        xrms = (float) sqrt((1.0 / interpolatedZeroCrossing) * (float) lockedCumulativeFilterOutput);
+        xrms = (float) sqrt((1.0 / interpolatedZeroCrossing) * (float) lockedCumulativeXSquared);
         xrms = ((xrms / 1023.0) * 3.1) * 212;
-        // xrms = (((float) maxVolt - (float) minVolt) / 2.0) / sqrt(2);
 
 #ifdef LCD_ENABLED
         char formatNumberBuffer[16];
@@ -420,35 +419,4 @@ void loop() {
 
         zeroCrossingFlag = false;
     }
-
-    /*
-    const int INTERVAL_MS = 1000;
-
-    unsigned long currentTime = millis();
-    if (currentTime - previousTime >= INTERVAL_MS) {
-
-        int diff = sampleCounter - previousSampleCounter;
-
-        Serial.print(currentTime);
-        Serial.print(" ms: counter=");
-        Serial.print(sampleCounter);
-        Serial.print(", diff=");
-        Serial.print(diff);
-        Serial.print(", filterOutput=");
-        Serial.print(filterOutput);
-        Serial.print(", frequency=");
-        Serial.print(frequency, 4);
-        Serial.print(", interpolatedZeroCrossing=");
-        Serial.print(interpolatedZeroCrossing);
-        Serial.print(", cumFilterOut");
-        Serial.print(lockedCumulativeFilterOutput);
-        Serial.print(", XRMS=");
-        Serial.print(xrms, 4);
-
-        Serial.println();
-
-        previousTime = currentTime;
-        previousSampleCounter = sampleCounter;
-    }
-    */
 }
