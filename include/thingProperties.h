@@ -12,13 +12,15 @@ const char PASS[] = SECRET_OPTIONAL_PASS;// Network password (use for WPA, or us
 
 float frequency = 50;
 float xrms = 1;
-float lowerFrequencyThreshold = 49;
-float upperFrequencyThreshold = 51;
+float lowerFrequencyThreshold = 49.9;
+float upperFrequencyThreshold = 50.1;
+bool isFrequencyWithinThresholds = true;
 
 void initProperties() {
 
     ArduinoCloud.addProperty(frequency, READ, 1 * SECONDS, NULL);
     ArduinoCloud.addProperty(xrms, READ, 1 * SECONDS, NULL);
+    ArduinoCloud.addProperty(isFrequencyWithinThresholds, READ, 1 * SECONDS, NULL);
     ArduinoCloud.addProperty(lowerFrequencyThreshold, READWRITE, 1 * SECONDS, NULL);
     ArduinoCloud.addProperty(upperFrequencyThreshold, READWRITE, 1 * SECONDS, NULL);
 }

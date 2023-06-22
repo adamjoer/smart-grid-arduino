@@ -44,8 +44,8 @@ constexpr int DC_MOTOR_COUNTER_CLOCKWISE_PIN = 2;
 #ifndef IOT_ENABLED
 volatile float frequency = 50;
 volatile float xrms = 1;
-constexpr float lowerFrequencyThreshold = 49.0;
-constexpr float upperFrequencyThreshold = 51.0;
+constexpr float lowerFrequencyThreshold = 49.9;
+constexpr float upperFrequencyThreshold = 50.1;
 #endif
 
 volatile int rawMeasurement = 0;
@@ -402,12 +402,24 @@ void loop() {
             redLedValue = HIGH;
             dcMotorClockwiseValue = HIGH;
 
+#ifdef IOT_ENABLED
+            isFrequencyWithinThresholds = false;
+#endif
+
         } else if (frequency > upperFrequencyThreshold) {
             yellowLedValue = HIGH;
             dcMotorCounterClockwiseValue = HIGH;
 
+#ifdef IOT_ENABLED
+            isFrequencyWithinThresholds = false;
+#endif
+
         } else {
             greenLedValue = HIGH;
+
+#ifdef IOT_ENABLED
+            isFrequencyWithinThresholds = true;
+#endif
         }
 
         digitalWrite(RED_LED_PIN, redLedValue);
